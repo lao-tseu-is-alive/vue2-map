@@ -14,3 +14,7 @@ selenium-debug.log
 *.ntvs*
 *.njsproj
 *.sln
+/doc/MasteringOpenLayers3_9781785281006-MASTERING_OPENLAYERS_3.pdf
+/doc/OpenLayers3_CookBook_9781785287756-OPENLAYERS_3X_COOKBOOK_SECOND_EDITION.pdf
+/doc/MasteringOpenLayers3_Code_9781785281006_Code.zip
+/doc/OpenLayers3_CookBook_Code_9781785287756_Code.zip

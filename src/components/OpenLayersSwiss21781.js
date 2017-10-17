@@ -1,21 +1,39 @@
+import Map from 'ol/map'
+import View from 'ol/view'
+import OlCoordinate from 'ol/coordinate'
+import OlControl from 'ol/control'
+import MousePosition from 'ol/control/mouseposition'
+
 import LayerTile from 'ol/layer/tile'
 import SourceWMTS from 'ol/source/wmts'
 import TileGridWMTS from 'ol/tilegrid/wmts'
 import Projection from 'ol/proj/projection'
+import Proj from 'ol/proj'
 import Attribution from 'ol/attribution'
 import proj4 from 'proj4'
 
 proj4.defs('EPSG:21781', '+proj=somerc +lat_0=46.95240555555556 +lon_0=7.439583333333333 +k_0=1 +x_0=600000 +y_0=200000 +ellps=bessel +towgs84=674.4,15.1,405.3,0,0,0,0 +units=m +no_defs')
+
+/*
+      // https://golux.lausanne.ch/goeland/objet/pointfixe.php?idobjet=111351
+      const coordPfa180Stfrancois = [538224.21, 152378.17] // PFA3 180 - St-Francois
+      console.log(`PFA3 180 - St-Francois en 21781 : ${coordPfa180Stfrancois[0]}, ${coordPfa180Stfrancois[1]}`)
+      const pfa180In4326 = Conv21781To4326(coordPfa180Stfrancois[0], coordPfa180Stfrancois[1])
+      console.log(`PFA3 180 - St-Francois en 4326  : ${pfa180In4326.x}, ${pfa180In4326.y} `)
+*/
+
 export function Conv21781To4326 (x, y) {
   const projSource = new proj4.Proj('EPSG:21781')
   const projDest = new proj4.Proj('EPSG:4326')
   return proj4.transform(projSource, projDest, [x, y])
 }
+
 export function Conv4326To21781 (x, y) {
   const projSource = new proj4.Proj('EPSG:4326')
   const projDest = new proj4.Proj('EPSG:21781')
   return proj4.transform(projSource, projDest, [x, y])
 }
+
 export function Conv3857To21781 (x, y) {
   const projSource = new proj4.Proj('EPSG:3857')
   const projDest = new proj4.Proj('EPSG:21781')
@@ -30,6 +48,7 @@ export const swissProjection = new Projection({
   extent: MAX_EXTENT_LIDAR,
   units: 'm'
 })
+Proj.addProjection(swissProjection)
 export const vdlWmts = initWmtsLayers()
 
 /**
@@ -114,4 +133,37 @@ function initWmtsLayers () {
     })
   }))
   return arrayWmts
+}
+
+export function getOlView (centerView = [537892.8, 152095.7], zoomView = 12) {
+  return new View({
+    projection: swissProjection,
+    center: centerView,
+    minZoom: 1,
+    maxZoom: 10,
+    extent: MAX_EXTENT_LIDAR,
+    zoom: zoomView
+  })
+}
+
+export function getOlMap (divMap, olView) {
+  let olMousePosition = new MousePosition({
+    coordinateFormat: OlCoordinate.createStringXY(1),
+    projection: 'EPSG:2181',
+    className: 'map-mouse-position',
+    target: document.getElementById('mousepos'),
+    undefinedHTML: '&nbsp;'
+  })
+  return new Map({
+    target: divMap,
+    loadTilesWhileAnimating: true,
+    // projection: swissProjection,
+    controls: OlControl.defaults({
+      attributionOptions: ({
+        collapsible: false
+      })
+    }).extend([olMousePosition]),
+    layers: vdlWmts,
+    view: olView
+  })
 }

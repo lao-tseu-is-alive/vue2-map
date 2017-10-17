@@ -3,7 +3,26 @@
     <slot></slot>
 
     <div id="oltoolbar" class="ol-toolbar">
-      <button id="cmdHello" class="map-control">Hello</button>
+      <button id="cmdClear" class="map-control" @click="clearNewFeatures">Clear</button>
+      <!--
+      <radio name="robot" value="navigate" v-model="uiMode" checked>
+        NAVIGATION
+      </radio>
+      <radio name="robot" value="create" v-model="uiMode">
+        CREATION
+      </radio>
+      <radio name="robot" value="edit" v-model="uiMode">
+        EDITION
+      </radio>
+      -->
+      <select id="modeSelector" class="ol-mode-selector map-control"
+              v-on:change="changeMode" v-model="uiMode"
+              title="Cliquez pour sélectionner le mode de travail">
+        <option value="NAVIGATE">Navigation</option>
+        <option value="CREATE">Création</option>
+        <option value="EDIT">Edition</option>
+      </select>
+      <span>{{uiMode}}</span>
       <select id="layerSelector" class="ol-layer-selector map-control"
               v-on:change="changeLayer" v-model="activeLayer"
       title="Cliquez pour sélectionner le fond de plan">
@@ -18,21 +37,30 @@
 </template>
 
 <script>
-  import {DEV} from './config'
+  import {DEV, geoJSONUrl} from './config'
   import {
     getOlView,
-    getOlMap
+    getOlMap,
+    addGeoJSONPolygonLayer,
+    initNewFeaturesLayer,
+    setCreateMode
   } from './OpenLayersSwiss21781'
+  import {Radio} from 'vue-checkbox-radio'
 
   const positionGareLausanne = [537892.8, 152095.7]
 
   export default {
     name: 'vue2MapOlSwiss21781',
+    components: {Radio},
     data () {
       return {
         msg: 'Basic OpenLayers Map',
+        uiMode: 'NAVIGATE',
         ol_map: null,
         ol_view: null,
+        ol_geoJSONLayer: null,
+        ol_newFeatures: null, // ol collection of features used for CREATE mode
+        ol_Active_Interactions: [],
         activeLayer: 'fonds_geo_osm_bdcad_couleur'
       }
     },
@@ -55,7 +83,7 @@
         let selectedLayer = event.target.value
         let layers = this.ol_map.getLayers()
         layers.forEach((layer) => {
-          // console.log(`## in changeLayer layers.forEach: layer = ${layer.get('title')}`, layer)
+          console.log(`## in changeLayer layers.forEach: layer = ${layer.get('title')}`, layer)
           let layerName = layer.get('source').layer_
           if (layer.get('type') === 'base') {
             if (layerName === selectedLayer) {
@@ -65,12 +93,47 @@
             }
           }
         })
+      },
+      changeMode: function (event) {
+        let selectedMode = event.target.value
+        if (DEV) console.log(`## in changeMode selectedMode = ${selectedMode}`)
+        this.ol_Active_Interactions.forEach((Interaction) => {
+          this.ol_map.removeInteraction(Interaction)
+        })
+        switch (selectedMode) {
+          case 'CREATE':
+            setCreateMode(
+              this.ol_map,
+              this.ol_newFeatures,
+              this.ol_Active_Interactions,
+              (newGeom) => {
+                if (DEV) console.log(`## in changeMode callback for setCreateMode`, newGeom)
+                // here is a good place to save geometry
+              })
+            break
+          case 'EDIT':
+            if (DEV) console.log(`## in changeMode selectedMode = ${selectedMode} NOT IMPLEMENTED`)
+            break
+          default:
+            if (DEV) console.log(`## in changeMode selectedMode = ${selectedMode} NOT IMPLEMENTED`)
+        }
+      },
+      clearNewFeatures: function () {
+        if (this.ol_newFeatures !== null) {
+          this.ol_newFeatures.clear()
+          this.ol_Active_Interactions.forEach((Interaction) => {
+            this.ol_map.removeInteraction(Interaction)
+          })
+          this.uiMode = 'NAVIGATE'
+        }
       }
     },
     mounted () {
-      document.getElementById('cmdHello').innerText = DEV ? 'Hello DEV' : 'Hello'
       this.ol_view = getOlView(this.center, this.zoom)
       this.ol_map = getOlMap(this.$el, this.ol_view)
+      this.ol_geoJSONLayer = addGeoJSONPolygonLayer(this.ol_map, geoJSONUrl)
+      this.ol_map.addLayer(this.ol_geoJSONLayer)
+      this.ol_newFeatures = initNewFeaturesLayer(this.ol_map)
       this.ol_map.on(
         'click',
         (evt) => {
@@ -148,5 +211,29 @@
       right: 0.2em;
       position: absolute;
     }
+  }
+
+  .radio-component  {
+    display: inline;
+  }
+
+  .checkbox-component > input + label > .input-box,
+  .radio-component > input + label > .input-box {
+    font-size: 1em;
+    text-align: center;
+    line-height: 1;
+    color: transparent;
+  }
+  .checkbox-component > input + label > .input-box > .input-box-tick,
+  .radio-component > input + label > .input-box > .input-box-circle {
+    display: none;
+  }
+  .checkbox-component > input + label > .input-box:before,
+  .radio-component > input + label > .input-box:before {
+    content: '✘';
+  }
+  .checkbox-component > input:checked + label > .input-box:before,
+  .radio-component > input:checked + label > .input-box:before {
+    color: #000;
   }
 </style>

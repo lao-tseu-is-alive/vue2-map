@@ -1,19 +1,34 @@
-import Map from 'ol/map'
-import View from 'ol/view'
-import OlCoordinate from 'ol/coordinate'
-import OlControl from 'ol/control'
-import MousePosition from 'ol/control/mouseposition'
-
-import LayerTile from 'ol/layer/tile'
-import SourceWMTS from 'ol/source/wmts'
-import TileGridWMTS from 'ol/tilegrid/wmts'
-import Projection from 'ol/proj/projection'
-import Proj from 'ol/proj'
-import Attribution from 'ol/attribution'
+import {DEV} from './config'
+import {functionExist} from './lib/htmlUtils'
+import OlMap from 'ol/map'
+import OlView from 'ol/view'
+import OlAttribution from 'ol/attribution'
+import OlCircle from 'ol/style/circle'
+import OlCollection from 'ol/collection'
+import olEventsCondition from 'ol/events/condition'
+import OlFeature from 'ol/feature'
+import OlFill from 'ol/style/fill'
+import OlGeoJSON from 'ol/format/geojson'
+import OlFormatWKT from 'ol/format/wkt'
+import OlInteractionModify from 'ol/interaction/modify'
+import OlInteractionDraw from 'ol/interaction/draw'
+import OlLayerVector from 'ol/layer/vector'
+import OlLayerTile from 'ol/layer/tile'
+import OlMousePosition from 'ol/control/mouseposition'
+import OlMultiPolygon from 'ol/geom/multipolygon'
+import olControl from 'ol/control'
+import olCoordinate from 'ol/coordinate'
+import olObservable from 'ol/observable'
+import olProj from 'ol/proj'
+import OlProjection from 'ol/proj/projection'
+import OlSourceVector from 'ol/source/vector'
+import OlSourceWMTS from 'ol/source/wmts'
+import OlStroke from 'ol/style/stroke'
+import OlStyle from 'ol/style/style'
+import OlTileGridWMTS from 'ol/tilegrid/wmts'
 import proj4 from 'proj4'
 
 proj4.defs('EPSG:21781', '+proj=somerc +lat_0=46.95240555555556 +lon_0=7.439583333333333 +k_0=1 +x_0=600000 +y_0=200000 +ellps=bessel +towgs84=674.4,15.1,405.3,0,0,0,0 +units=m +no_defs')
-
 /*
       // https://golux.lausanne.ch/goeland/objet/pointfixe.php?idobjet=111351
       const coordPfa180Stfrancois = [538224.21, 152378.17] // PFA3 180 - St-Francois
@@ -21,7 +36,6 @@ proj4.defs('EPSG:21781', '+proj=somerc +lat_0=46.95240555555556 +lon_0=7.4395833
       const pfa180In4326 = Conv21781To4326(coordPfa180Stfrancois[0], coordPfa180Stfrancois[1])
       console.log(`PFA3 180 - St-Francois en 4326  : ${pfa180In4326.x}, ${pfa180In4326.y} `)
 */
-
 export function Conv21781To4326 (x, y) {
   const projSource = new proj4.Proj('EPSG:21781')
   const projDest = new proj4.Proj('EPSG:4326')
@@ -42,14 +56,76 @@ export function Conv3857To21781 (x, y) {
 
 const baseWmtsUrl = 'https://map.lausanne.ch/tiles' // valid on internet
 const RESOLUTIONS = [50, 20, 10, 5, 2.5, 1, 0.5, 0.25, 0.1, 0.05]
-export const MAX_EXTENT_LIDAR = [532500, 149000, 545625, 161000] // lidar 2012
-export const swissProjection = new Projection({
+const MAX_EXTENT_LIDAR = [532500, 149000, 545625, 161000] // lidar 2012
+const swissProjection = new OlProjection({
   code: 'EPSG:21781',
   extent: MAX_EXTENT_LIDAR,
   units: 'm'
 })
-Proj.addProjection(swissProjection)
-export const vdlWmts = initWmtsLayers()
+olProj.addProjection(swissProjection)
+const vdlWmts = initWmtsLayers()
+
+const overlayStyle = (function () {
+  /* jshint -W069 */
+  const styles = {}
+  styles['Polygon'] = [
+    new OlStyle({
+      fill: new OlFill({
+        color: [255, 255, 255, 0.5]
+      })
+    }),
+    new OlStyle({
+      stroke: new OlStroke({
+        color: [255, 255, 255, 1],
+        width: 5
+      })
+    }),
+    new OlStyle({
+      stroke: new OlStroke({
+        color: [0, 153, 255, 1],
+        width: 3
+      })
+    })]
+  styles['MultiPolygon'] = styles['Polygon']
+
+  styles['LineString'] = [
+    new OlStyle({
+      stroke: new OlStroke({
+        color: [255, 255, 255, 1],
+        width: 5
+      })
+    }),
+    new OlStyle({
+      stroke: new OlStroke({
+        color: [0, 153, 255, 1],
+        width: 3
+      })
+    })]
+  styles['MultiLineString'] = styles['LineString']
+
+  styles['Point'] = [
+    new OlStyle({
+      image: new OlCircle({
+        radius: 7,
+        fill: new OlFill({
+          color: [0, 153, 255, 1]
+        }),
+        stroke: new OlStroke({
+          color: [255, 255, 255, 0.75],
+          width: 1.5
+        })
+      }),
+      zIndex: 100000
+    })]
+  styles['MultiPoint'] = styles['Point']
+
+  styles['GeometryCollection'] = styles['Polygon'].concat(styles['Point'])
+
+  return function (feature, resolution) {
+    return styles[feature.getGeometry().getType()]
+  }
+  /* jshint +W069 */
+})()
 
 /**
  * Allow to retrieve a valid OpenLayers WMTS source object
@@ -57,12 +133,12 @@ export const vdlWmts = initWmtsLayers()
  * @param {object} options
  * @return {ol.source.WMTS} a valid OpenLayers WMTS source
  */
-export function wmtsLausanneSource (layer, options) {
+function wmtsLausanneSource (layer, options) {
   let resolutions = RESOLUTIONS
   if (Array.isArray(options.resolutions)) {
     resolutions = options.resolutions
   }
-  const tileGrid = new TileGridWMTS({
+  const tileGrid = new OlTileGridWMTS({
     origin: [420000, 350000],
     resolutions: resolutions,
     matrixIds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
@@ -73,9 +149,9 @@ export function wmtsLausanneSource (layer, options) {
     '/swissgrid_05/{TileMatrix}/{TileRow}/{TileCol}.' + extension
   url = url.replace('http:', location.protocol)
   // noinspection ES6ModulesDependencies
-  return new SourceWMTS(/** @type {olx.source.WMTSOptions} */{
+  return new OlSourceWMTS(/** @type {olx.source.WMTSOptions} */{
     // crossOrigin: 'anonymous',
-    attributions: [new Attribution({
+    attributions: [new OlAttribution({
       html: `&copy;<a "href='http://www.lausanne.ch/cadastre>Cadastre'>SGLEA-C Lausanne</a>`
     })],
     url: url,
@@ -87,7 +163,7 @@ export function wmtsLausanneSource (layer, options) {
 
 function initWmtsLayers () {
   let arrayWmts = []
-  arrayWmts.push(new LayerTile({
+  arrayWmts.push(new OlLayerTile({
     title: 'Plan ville couleur',
     type: 'base',
     visible: true,
@@ -96,7 +172,7 @@ function initWmtsLayers () {
       format: 'png'
     })
   }))
-  arrayWmts.push(new LayerTile({
+  arrayWmts.push(new OlLayerTile({
     title: 'Plan cadastral (gris)',
     type: 'base',
     visible: false,
@@ -105,7 +181,7 @@ function initWmtsLayers () {
       format: 'png'
     })
   }))
-  arrayWmts.push(new LayerTile({
+  arrayWmts.push(new OlLayerTile({
     title: 'Orthophoto 2012',
     type: 'base',
     visible: false,
@@ -114,7 +190,7 @@ function initWmtsLayers () {
       format: 'png'
     })
   }))
-  arrayWmts.push(new LayerTile({
+  arrayWmts.push(new OlLayerTile({
     title: 'Orthophoto 2016',
     type: 'base',
     visible: false,
@@ -123,7 +199,7 @@ function initWmtsLayers () {
       format: 'png'
     })
   }))
-  arrayWmts.push(new LayerTile({
+  arrayWmts.push(new OlLayerTile({
     title: 'Carte Nationale',
     type: 'base',
     visible: false,
@@ -136,7 +212,7 @@ function initWmtsLayers () {
 }
 
 export function getOlView (centerView = [537892.8, 152095.7], zoomView = 12) {
-  return new View({
+  return new OlView({
     projection: swissProjection,
     center: centerView,
     minZoom: 1,
@@ -147,18 +223,18 @@ export function getOlView (centerView = [537892.8, 152095.7], zoomView = 12) {
 }
 
 export function getOlMap (divMap, olView) {
-  let olMousePosition = new MousePosition({
-    coordinateFormat: OlCoordinate.createStringXY(1),
+  let olMousePosition = new OlMousePosition({
+    coordinateFormat: olCoordinate.createStringXY(1),
     projection: 'EPSG:2181',
     className: 'map-mouse-position',
     target: document.getElementById('mousepos'),
     undefinedHTML: '&nbsp;'
   })
-  return new Map({
+  return new OlMap({
     target: divMap,
     loadTilesWhileAnimating: true,
     // projection: swissProjection,
-    controls: OlControl.defaults({
+    controls: olControl.defaults({
       attributionOptions: ({
         collapsible: false
       })
@@ -167,3 +243,119 @@ export function getOlMap (divMap, olView) {
     view: olView
   })
 }
+
+export function addGeoJSONPolygonLayer (olMap, geojsonUrl, loadCompleteCallback) {
+  if (DEV) console.log(`# in addGeoJSONPolygonLayer creating Layer : ${geojsonUrl}`)
+  const vectorSource = new OlSourceVector({
+    url: geojsonUrl,
+    format: new OlGeoJSON({
+      defaultDataProjection: 'EPSG:21781',
+      projection: 'EPSG:21781'
+    })
+  })
+  /*
+   https://openlayers.org/en/latest/examples/draw-and-modify-features.html
+   https://openlayers.org/en/latest/examples/modify-features.html
+   TODO use a property of the geojson query to display color
+   or a style function  : http://openlayersbook.github.io/ch06-styling-vector-layers/example-07.html
+   */
+  const newLayer = new OlLayerVector({
+    source: vectorSource,
+    style: new OlStyle({
+      fill: new OlFill({
+        color: 'rgba(255, 0, 0, 0.8)'
+      }),
+      stroke: new OlStroke({
+        color: '#ffcc33',
+        width: 3
+      }),
+      image: new OlCircle({
+        radius: 9,
+        fill: new OlFill({
+          color: '#ffcc33'
+        })
+      })
+    })
+  })
+  let listenerKey = vectorSource.on('change', function (e) {
+    if (vectorSource.getState() === 'ready') {
+      // TODO maybe add "loading icon" and here where to hide it
+      // retrieve extent of all features to zoom only when loading of the layer via Ajax XHR is complete
+      let extent = newLayer.getSource().getExtent()
+      // TODO activate insert/edit toolbar buttons only when layer has finished loading
+      if (DEV) {
+        console.log(`# Finished Loading Layer : ${geojsonUrl}`, e)
+      }
+      olMap.getView().fit(extent, olMap.getSize())
+      // and unregister the "change" listener
+      olObservable.unByKey(listenerKey)
+      if (functionExist(loadCompleteCallback)) {
+        loadCompleteCallback(newLayer)
+      }
+    }
+  })
+  return newLayer
+}
+
+export function initNewFeaturesLayer (olMap) {
+  const features = new OlCollection()
+  const featureOverlay = new OlLayerVector({
+    source: new OlSourceVector({features: features}),
+    style: new OlStyle({
+      fill: new OlFill({
+        color: 'rgba(255, 255, 255, 0.2)'
+      }),
+      stroke: new OlStroke({
+        color: '#ffcc33',
+        width: 2
+      }),
+      image: new OlCircle({
+        radius: 7,
+        fill: new OlFill({
+          color: '#ffcc33'
+        })
+      })
+    })
+  })
+  featureOverlay.setMap(olMap)
+  return features
+}
+
+export function setCreateMode (olMap, olFeatures, arrInteractionsStore, endCreateCallback) {
+  let multiPolygon = new OlMultiPolygon([])
+  const modify = new OlInteractionModify({
+    features: olFeatures,
+    // the SHIFT key must be pressed to delete vertices, so
+    // that new vertices can be drawn at the same position
+    // of existing vertices
+    deleteCondition: function (event) {
+      return olEventsCondition.shiftKeyOnly(event) &&
+        olEventsCondition.singleClick(event)
+    }
+  })
+  olMap.addInteraction(modify)
+  arrInteractionsStore.push(modify)
+  const draw = new OlInteractionDraw({
+    features: olFeatures, // vectorSource.getFeatures(), //TODO find the correct object to pass
+    type: 'Polygon' /** @type {ol.geom.GeometryType} */
+  })
+  draw.on('drawend', function (e) {
+    let currentFeature = e.feature // this is the feature fired the event
+    let currentPolygon = currentFeature.getGeometry()
+    multiPolygon.appendPolygon(currentPolygon)
+    const formatWKT = new OlFormatWKT()
+    let multiPolygonFeature = new OlFeature({
+      geometry: multiPolygon
+    })
+    if (DEV) {
+      let featureWKTGeometry = formatWKT.writeFeature(multiPolygonFeature)
+      console.log(`INSIDE setCreateMode event drawend : ${featureWKTGeometry}`)
+    }
+    if (functionExist(endCreateCallback)) {
+      endCreateCallback(multiPolygonFeature)
+    }
+  })
+  olMap.addInteraction(draw)
+  arrInteractionsStore.push(draw)
+}
+console.log(overlayStyle) // To delete after edit implemented

@@ -2,7 +2,7 @@
 /**
  * Created by cgil on 2/1/17.
  */
-import {DEV} from '../config'
+// import {DEV} from '../config'
 export const getEl = (elemntId) => (document.getElementById(elemntId))
 export const functionExist = (functionName) => ((typeof (functionName) !== 'undefined') && (functionName !== null))
 export const isNullOrUndefined = (variable) => ((typeof (variable) === 'undefined') || (variable === null))
@@ -69,7 +69,7 @@ export const getArrObjectsProperties = function (objectName) {
   let arr = []
   for (let prop in objectName) {
     if (objectName.hasOwnProperty(prop)) {
-      (DEV) ? console.log(prop) : ''
+      // (DEV) ? console.log(prop) : ''
       arr.push(prop)
     }
   }

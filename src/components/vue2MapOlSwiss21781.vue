@@ -21,6 +21,7 @@
         <option value="NAVIGATE">Navigation</option>
         <option value="CREATE">Création</option>
         <option value="EDIT">Edition</option>
+        <option value="TRANSLATE">Déplacer</option>
       </select>
       <span>{{uiMode}}</span>
       <select id="layerSelector" class="ol-layer-selector map-control"
@@ -38,12 +39,17 @@
 
 <script>
   import {DEV, geoJSONUrl} from './config'
+  import OlCollection from 'ol/collection'
+  import {isNullOrUndefined, dumpObject2String} from './lib/htmlUtils'
   import {
     getOlView,
     getOlMap,
     addGeoJSONPolygonLayer,
     initNewFeaturesLayer,
-    setCreateMode
+    setCreateMode,
+    setModifyMode,
+    setTranslateMode,
+    getNumberFeaturesInLayer
   } from './OpenLayersSwiss21781'
   import {Radio} from 'vue-checkbox-radio'
 
@@ -59,7 +65,8 @@
         ol_map: null,
         ol_view: null,
         ol_geoJSONLayer: null,
-        ol_newFeatures: null, // ol collection of features used for CREATE mode
+        ol_newFeatures: null, // ol collection of features used as vector source for CREATE mode
+        ol_newFeaturesLayer: null, // Vector Layer for storing new features
         ol_Active_Interactions: [],
         activeLayer: 'fonds_geo_osm_bdcad_couleur'
       }
@@ -107,12 +114,27 @@
               this.ol_newFeatures,
               this.ol_Active_Interactions,
               (newGeom) => {
-                if (DEV) console.log(`## in changeMode callback for setCreateMode`, newGeom)
+                if (DEV) {
+                  console.log(`## in changeMode callback for setCreateMode`, newGeom)
+                  console.log(`** Il y a ${getNumberFeaturesInLayer(this.ol_newFeaturesLayer)} polygones`)
+                }
                 // here is a good place to save geometry
               })
             break
           case 'EDIT':
             if (DEV) console.log(`## in changeMode selectedMode = ${selectedMode} NOT IMPLEMENTED`)
+            setModifyMode(this.ol_map, this.ol_newFeaturesLayer, this.ol_Active_Interactions,
+              (newGeom) => {
+                if (DEV) {
+                  console.log(`## in changeMode callback for setModifyMode`, newGeom)
+                  console.log(`** Il y a ${getNumberFeaturesInLayer(this.ol_newFeaturesLayer)} polygones`)
+                }
+                // here is a good place to save geometry
+              })
+            break
+          case 'TRANSLATE':
+            if (DEV) console.log(`## in changeMode selectedMode = ${selectedMode} NOT IMPLEMENTED`)
+            setTranslateMode(this.ol_map, this.ol_newFeaturesLayer, this.ol_Active_Interactions)
             break
           default:
             if (DEV) console.log(`## in changeMode selectedMode = ${selectedMode} NOT IMPLEMENTED`)
@@ -133,14 +155,20 @@
       this.ol_map = getOlMap(this.$el, this.ol_view)
       this.ol_geoJSONLayer = addGeoJSONPolygonLayer(this.ol_map, geoJSONUrl)
       this.ol_map.addLayer(this.ol_geoJSONLayer)
-      this.ol_newFeatures = initNewFeaturesLayer(this.ol_map)
+      this.ol_newFeatures = new OlCollection()
+      this.ol_newFeaturesLayer = initNewFeaturesLayer(this.ol_map, this.ol_newFeatures)
       this.ol_map.on(
         'click',
         (evt) => {
           console.log(`## GoMap click at : ${evt.coordinate[0]}, ${evt.coordinate[1]}`)
-          const feature = this.ol_map.forEachFeatureAtPixel(evt.pixel, (feature) => feature)
-          if (feature) {
-            this.$emit('selfeature', feature)
+          console.log(`** Il y a ${getNumberFeaturesInLayer(this.ol_newFeaturesLayer)} polygones`)
+          if (this.uiMode === 'NAVIGATE') {
+            this.ol_map.forEachFeatureAtPixel(evt.pixel, (feature, layer) => {
+              console.log(`## GoMap click evt feature detected : `, feature)
+              if (!isNullOrUndefined(layer))console.log(`   feature found in layer : `, layer)
+              console.log(dumpObject2String(feature.getProperties()))
+              this.$emit('selfeature', feature)
+            })
           } else {
             this.$emit('gomapclick', evt.coordinate)
           }

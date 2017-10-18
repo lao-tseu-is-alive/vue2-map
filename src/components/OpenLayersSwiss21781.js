@@ -4,14 +4,15 @@ import OlMap from 'ol/map'
 import OlView from 'ol/view'
 import OlAttribution from 'ol/attribution'
 import OlCircle from 'ol/style/circle'
-import OlCollection from 'ol/collection'
 import olEventsCondition from 'ol/events/condition'
 import OlFeature from 'ol/feature'
 import OlFill from 'ol/style/fill'
 import OlGeoJSON from 'ol/format/geojson'
 import OlFormatWKT from 'ol/format/wkt'
-import OlInteractionModify from 'ol/interaction/modify'
 import OlInteractionDraw from 'ol/interaction/draw'
+import OlInteractionModify from 'ol/interaction/modify'
+import OlInteractionSelect from 'ol/interaction/select'
+import OlInteractionTranslate from 'ol/interaction/translate'
 import OlLayerVector from 'ol/layer/vector'
 import OlLayerTile from 'ol/layer/tile'
 import OlMousePosition from 'ol/control/mouseposition'
@@ -211,6 +212,12 @@ function initWmtsLayers () {
   return arrayWmts
 }
 
+/**
+ * creates an OpenLayers View Object
+ * @param {array} centerView : an array [x,y] representing initial initial center of the view
+ * @param {number} zoomView : an integer from 1 to 12 representing the level of zoom
+ * @returns {ol.View} : the OpenLayers Vew object
+ */
 export function getOlView (centerView = [537892.8, 152095.7], zoomView = 12) {
   return new OlView({
     projection: swissProjection,
@@ -297,10 +304,9 @@ export function addGeoJSONPolygonLayer (olMap, geojsonUrl, loadCompleteCallback)
   return newLayer
 }
 
-export function initNewFeaturesLayer (olMap) {
-  const features = new OlCollection()
-  const featureOverlay = new OlLayerVector({
-    source: new OlSourceVector({features: features}),
+export function initNewFeaturesLayer (olMap, olFeatures) {
+  const newFeaturesLayer = new OlLayerVector({
+    source: new OlSourceVector({features: olFeatures}),
     style: new OlStyle({
       fill: new OlFill({
         color: 'rgba(255, 255, 255, 0.2)'
@@ -310,15 +316,16 @@ export function initNewFeaturesLayer (olMap) {
         width: 2
       }),
       image: new OlCircle({
-        radius: 7,
+        radius: 10,
         fill: new OlFill({
-          color: '#ffcc33'
+          color: '#ff4f22'
         })
       })
     })
   })
-  featureOverlay.setMap(olMap)
-  return features
+  // newFeaturesLayer.setMap(olMap) // use this to have an overlay
+  olMap.addLayer(newFeaturesLayer)
+  return newFeaturesLayer
 }
 
 export function setCreateMode (olMap, olFeatures, arrInteractionsStore, endCreateCallback) {
@@ -343,6 +350,7 @@ export function setCreateMode (olMap, olFeatures, arrInteractionsStore, endCreat
     let currentFeature = e.feature // this is the feature fired the event
     let currentPolygon = currentFeature.getGeometry()
     multiPolygon.appendPolygon(currentPolygon)
+    // TODO here is where i may check the validity of the new polygon
     const formatWKT = new OlFormatWKT()
     let multiPolygonFeature = new OlFeature({
       geometry: multiPolygon
@@ -358,4 +366,80 @@ export function setCreateMode (olMap, olFeatures, arrInteractionsStore, endCreat
   olMap.addInteraction(draw)
   arrInteractionsStore.push(draw)
 }
+
+export function setModifyMode (olMap, olLayer2Edit, arrInteractionsStore, endModifyCallback) {
+  // let multiPolygon = new OlMultiPolygon([])
+  let select = new OlInteractionSelect({
+    layers: [olLayer2Edit],
+    wrapX: false,
+    style: overlayStyle
+  })
+  let modify = new OlInteractionModify({
+    features: select.getFeatures()
+  })
+  modify.on('modifyend', function (e) {
+    console.log(`INSIDE setModifyMode event modifyend : `, e)
+    // let currentFeature = e.feature // this is the feature fired the event
+    /*
+    let currentPolygon = currentFeature.getGeometry()
+    multiPolygon.appendPolygon(currentPolygon)
+    // TODO here is where i may check the validity of the new polygon
+    const formatWKT = new OlFormatWKT()
+    let multiPolygonFeature = new OlFeature({
+      geometry: multiPolygon
+    })
+    if (DEV) {
+      let featureWKTGeometry = formatWKT.writeFeature(multiPolygonFeature)
+      console.log(`INSIDE setModifyMode event modifyend : ${featureWKTGeometry}`)
+    }
+    if (functionExist(endModifyCallback)) {
+      endModifyCallback(multiPolygonFeature)
+    }
+    */
+  })
+  olMap.addInteraction(select)
+  olMap.addInteraction(modify)
+  arrInteractionsStore.push(select)
+  arrInteractionsStore.push(modify)
+}
+
+export function setTranslateMode (olMap, olLayer2Translate, arrInteractionsStore) {
+  let select = new OlInteractionSelect({
+    layers: [olLayer2Translate]
+  })
+  let translate = new OlInteractionTranslate({
+    features: select.getFeatures()
+  })
+  olMap.addInteraction(select)
+  olMap.addInteraction(translate)
+  arrInteractionsStore.push(select)
+  arrInteractionsStore.push(translate)
+}
+
+export function findFeaturebyId (olLayer, idFieldName, id) {
+  let source = olLayer.getSource()
+  let arrFeatures = source.getFeatures()
+  for (let i = 0; i < arrFeatures.length; i++) {
+    if (arrFeatures[i].getProperties()[idFieldName] === id) {
+      return arrFeatures[i]
+    }
+  }
+  return null
+}
+
+export function getFeatureExtentbyId (olLayer, idFieldName, id) {
+  let feature = this.findFeaturebyId(olLayer, idFieldName, id)
+  if (feature != null) {
+    return feature.getGeometry().getExtent()
+  } else {
+    return null
+  }
+}
+
+export function getNumberFeaturesInLayer (olLayer) {
+  let source = olLayer.getSource()
+  let arrFeatures = source.getFeatures()
+  return arrFeatures.length
+}
+
 console.log(overlayStyle) // To delete after edit implemented

@@ -1,8 +1,65 @@
+<!-- Add "scoped" attribute to limit CSS to this component only -->
+<style lang="scss">
+
+  @import "../styles/ol.css";
+
+  $toolbar_height: 1.8em;
+  $button_size: 1.5em;
+
+  .main {
+    width: 100%;
+    height: 97%;
+    margin: 0px;
+    padding: 0px;
+    overflow: hidden;
+  }
+
+  .map-toolbar{
+    height: $toolbar_height;
+    background-color: rgba(0,60,136,0.5);
+    .map-control {
+      font-size: $toolbar_height - 0.7;
+      height: $toolbar_height - 0.3;
+      background-color: white;
+      border-radius: 4px;
+    }
+    .ol-layer-selector {
+      right: 0.2em;
+      // position: absolute;
+    }
+  }
+  .map-content{
+    height: 95%;
+    background-color: white;
+    .ol-mouse-position {
+      // par default en haut a droite
+      // ici on deplace en bas a gauche
+      top: unset;
+      right: unset;
+      bottom: 5px;
+      left: 5px;
+    }
+  }
+
+    .ol-zoom {
+    //top: $toolbar_height+1.5;
+    .ol-zoom-in {
+      width: $button_size;
+      height: $button_size;
+    }
+    .ol-zoom-out {
+      width: $button_size;
+      height: $button_size;
+    }
+  }
+
+</style>
+
 <template>
-  <div class="vue2-map">
+  <div class="main">
     <slot></slot>
 
-    <div id="oltoolbar" class="ol-toolbar">
+    <div ref="mytoolbar" class="map-toolbar">
       <button id="cmdClear" class="map-control" @click="clearNewFeatures">Clear</button>
       <!--
       <radio name="robot" value="navigate" v-model="uiMode" checked>
@@ -23,7 +80,6 @@
         <option value="EDIT">Edition</option>
         <option value="TRANSLATE">Déplacer</option>
       </select>
-      <span>{{uiMode}}</span>
       <select id="layerSelector" class="ol-layer-selector map-control"
               v-on:change="changeLayer" v-model="activeLayer"
       title="Cliquez pour sélectionner le fond de plan">
@@ -33,7 +89,7 @@
         <option value="orthophotos_ortho_lidar_2012">Orthophotos 2012</option>
       </select>
     </div>
-    <div id="mousepos"></div>
+    <div ref="mymap" class="map-content"></div>
   </div>
 </template>
 
@@ -152,7 +208,7 @@
     },
     mounted () {
       this.ol_view = getOlView(this.center, this.zoom)
-      this.ol_map = getOlMap(this.$el, this.ol_view)
+      this.ol_map = getOlMap(this.$refs.mymap, this.ol_view)
       this.ol_geoJSONLayer = addGeoJSONPolygonLayer(this.ol_map, geoJSONUrl)
       this.ol_map.addLayer(this.ol_geoJSONLayer)
       this.ol_newFeatures = new OlCollection()
@@ -173,95 +229,12 @@
             this.$emit('gomapclick', evt.coordinate)
           }
         })
+      window.onresize = () => {
+        console.log(`## GoMap resize`, this.ol_map)
+        // this.$refs.mymap.clientHeight = window.innerHeight - 60
+        this.ol_map.updateSize()
+      }
     }
   }
 </script>
 
-<!-- Add "scoped" attribute to limit CSS to this component only -->
-<style lang="scss">
-
-  @import "../styles/ol.css";
-
-  $toolbar_height: 1.8em;
-  $button_size: 1.5em;
-
-  .vue2-map {
-    width: 100%;
-    height: 100%;
-    margin: 0px;
-    padding: 0px;
-  }
-
-  .map-mouse-position {
-    background-color: white;
-    position: fixed;
-    bottom: 0em;
-    left: 0.1em;
-    height: 1.1em;
-    width: auto;
-    line-height: 1em;
-    z-index: 300;
-  }
-
-  .ol-zoom {
-    top: $toolbar_height+1.5;
-    .ol-zoom-in {
-      width: $button_size;
-      height: $button_size;
-    }
-    .ol-zoom-out {
-      width: $button_size;
-      height: $button_size;
-    }
-  }
-
-  .ol-toolbar {
-    background-color: rgba(0,60,136,0.5);
-    font-size: 1.2em;
-    position: absolute;
-    z-index: 250;
-    top: 0px;
-    left: 0px;
-    height: $toolbar_height;
-    width: 100%;
-    padding-top: 0.2em;
-    border-radius: 4px;
-    .map-control {
-      font-size: $toolbar_height - 0.8;
-      height: $toolbar_height - 0.4;
-      background-color: white;
-      border-radius: 4px;
-    }
-    button {
-      height: $button_size;
-    }
-    .ol-layer-selector {
-      right: 0.2em;
-      position: absolute;
-    }
-  }
-
-  .radio-component  {
-    display: inline;
-  }
-
-  .checkbox-component > input + label > .input-box,
-  .radio-component > input + label > .input-box {
-    font-size: 1em;
-    text-align: center;
-    line-height: 1;
-    color: transparent;
-  }
-  .checkbox-component > input + label > .input-box > .input-box-tick,
-  .radio-component > input + label > .input-box > .input-box-circle {
-    display: none;
-  }
-  .checkbox-component > input + label > .input-box:before,
-  .radio-component > input + label > .input-box:before {
-    content: '✘';
-  }
-  .checkbox-component > input:checked + label > .input-box:before,
-  .radio-component > input:checked + label > .input-box:before {
-    color: #000;
-  }
-</style>

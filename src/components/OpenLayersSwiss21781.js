@@ -64,7 +64,7 @@ const swissProjection = new OlProjection({
   units: 'm'
 })
 olProj.addProjection(swissProjection)
-const vdlWmts = initWmtsLayers()
+// const vdlWmts = initWmtsLayers()
 
 const overlayStyle = (function () {
   /* jshint -W069 */
@@ -232,10 +232,12 @@ export function getOlView (centerView = [537892.8, 152095.7], zoomView = 12) {
 export function getOlMap (divMap, olView) {
   let olMousePosition = new OlMousePosition({
     coordinateFormat: olCoordinate.createStringXY(1),
-    projection: 'EPSG:2181',
+    projection: 'EPSG:2181'
+    /*
     className: 'map-mouse-position',
     target: document.getElementById('mousepos'),
     undefinedHTML: '&nbsp;'
+    */
   })
   return new OlMap({
     target: divMap,
@@ -246,7 +248,7 @@ export function getOlMap (divMap, olView) {
         collapsible: false
       })
     }).extend([olMousePosition]),
-    layers: vdlWmts,
+    layers: initWmtsLayers(),
     view: olView
   })
 }

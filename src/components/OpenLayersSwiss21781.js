@@ -1,5 +1,5 @@
 import {DEV} from './config'
-import {functionExist} from './lib/htmlUtils'
+import {functionExist, isNullOrUndefined} from './lib/htmlUtils'
 import OlMap from 'ol/map'
 import OlView from 'ol/view'
 import OlAttribution from 'ol/attribution'
@@ -17,6 +17,7 @@ import OlLayerVector from 'ol/layer/vector'
 import OlLayerTile from 'ol/layer/tile'
 import OlMousePosition from 'ol/control/mouseposition'
 import OlMultiPolygon from 'ol/geom/multipolygon'
+import OlMultiPoint from 'ol/geom/multipoint'
 import olControl from 'ol/control'
 import olCoordinate from 'ol/coordinate'
 import olObservable from 'ol/observable'
@@ -371,10 +372,42 @@ export function setCreateMode (olMap, olFeatures, arrInteractionsStore, endCreat
 
 export function setModifyMode (olMap, olLayer2Edit, arrInteractionsStore, endModifyCallback) {
   // let multiPolygon = new OlMultiPolygon([])
+  let modifyStyles = [
+    /* We are using two different styles for the polygons:
+     *  - The first style is for the polygons themselves.
+     *  - The second style is to draw the vertices of the polygons.
+     *    In a custom `geometry` function the vertices of a polygon are
+     *    returned as `MultiPoint` geometry, which will be used to render
+     *    the style.
+     */
+    new OlStyle({
+      stroke: new OlStroke({
+        color: 'blue',
+        width: 3
+      }),
+      fill: new OlFill({
+        color: 'rgba(0, 0, 255, 0.1)'
+      })
+    }),
+    new OlStyle({
+      image: new OlCircle({
+        radius: 5,
+        fill: new OlFill({
+          color: 'orange'
+        })
+      }),
+      geometry: function (feature) {
+        // return the coordinates of the first ring of the polygon
+        var coordinates = feature.getGeometry().getCoordinates()[0]
+        return new OlMultiPoint(coordinates)
+      }
+    })
+  ]
+  if (DEV) console.log(overlayStyle)
   let select = new OlInteractionSelect({
     layers: [olLayer2Edit],
     wrapX: false,
-    style: overlayStyle
+    style: modifyStyles // overlayStyle
   })
   let modify = new OlInteractionModify({
     features: select.getFeatures()
@@ -439,9 +472,27 @@ export function getFeatureExtentbyId (olLayer, idFieldName, id) {
 }
 
 export function getNumberFeaturesInLayer (olLayer) {
-  let source = olLayer.getSource()
-  let arrFeatures = source.getFeatures()
-  return arrFeatures.length
+  if (isNullOrUndefined(olLayer)) {
+    return 0
+  } else {
+    let source = olLayer.getSource()
+    let arrFeatures = source.getFeatures()
+    return arrFeatures.length
+  }
 }
 
-console.log(overlayStyle) // To delete after edit implemented
+export function getWktGeometryFeaturesInLayer (olLayer) {
+  if (isNullOrUndefined(olLayer)) {
+    return null
+  } else {
+    let source = olLayer.getSource()
+    let arrFeatures = source.getFeatures()
+    let strGeom = ''
+    for (let i = 0; i < arrFeatures.length; i++) {
+      if (DEV) console.log(arrFeatures[i], arrFeatures[i].getGeometry())
+      strGeom += ``
+    }
+    return strGeom
+  }
+}
+

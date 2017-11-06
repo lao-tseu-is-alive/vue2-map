@@ -52,6 +52,12 @@
       height: $button_size;
     }
   }
+  .gostatus{
+    background-color: #1a1a1a;
+    color: yellowgreen;
+    padding: 2px;
+
+  }
 
 </style>
 
@@ -88,6 +94,7 @@
         <option value="orthophotos_ortho_lidar_2016">Orthophotos 2016</option>
         <option value="orthophotos_ortho_lidar_2012">Orthophotos 2012</option>
       </select>
+      <span class="gostatus">{{getNumPolygons}} Polygones</span>
     </div>
     <div ref="mymap" class="map-content"></div>
   </div>
@@ -96,6 +103,7 @@
 <script>
   import {DEV, geoJSONUrl} from './config'
   import OlCollection from 'ol/collection'
+  import OlFormatWKT from 'ol/format/wkt'
   import {isNullOrUndefined, dumpObject2String} from './lib/htmlUtils'
   import {
     getOlView,
@@ -105,7 +113,8 @@
     setCreateMode,
     setModifyMode,
     setTranslateMode,
-    getNumberFeaturesInLayer
+    getNumberFeaturesInLayer,
+    getWktGeometryFeaturesInLayer
   } from './OpenLayersSwiss21781'
   import {Radio} from 'vue-checkbox-radio'
 
@@ -138,7 +147,12 @@
       },
       baseLayer: {
         type: String,
-        default: 'opentopomap'
+        default: 'fonds_geo_osm_bdcad_couleur'
+      }
+    },
+    computed: {
+      getNumPolygons: function () {
+        return getNumberFeaturesInLayer(this.ol_newFeaturesLayer)
       }
     },
     methods: {
@@ -164,6 +178,8 @@
           this.ol_map.removeInteraction(Interaction)
         })
         switch (selectedMode) {
+          case 'NAVIGATE':
+            break
           case 'CREATE':
             setCreateMode(
               this.ol_map,
@@ -172,13 +188,15 @@
               (newGeom) => {
                 if (DEV) {
                   console.log(`## in changeMode callback for setCreateMode`, newGeom)
-                  console.log(`** Il y a ${getNumberFeaturesInLayer(this.ol_newFeaturesLayer)} polygones`)
+                  const formatWKT = new OlFormatWKT()
+                  let featureWKTGeometry = formatWKT.writeFeature(newGeom)
+                  console.log(`** newGeom in wkt format : ${featureWKTGeometry}`)
+                  this.$emit('gomapnewgeom', featureWKTGeometry)
                 }
                 // here is a good place to save geometry
               })
             break
           case 'EDIT':
-            if (DEV) console.log(`## in changeMode selectedMode = ${selectedMode} NOT IMPLEMENTED`)
             setModifyMode(this.ol_map, this.ol_newFeaturesLayer, this.ol_Active_Interactions,
               (newGeom) => {
                 if (DEV) {
@@ -189,7 +207,6 @@
               })
             break
           case 'TRANSLATE':
-            if (DEV) console.log(`## in changeMode selectedMode = ${selectedMode} NOT IMPLEMENTED`)
             setTranslateMode(this.ol_map, this.ol_newFeaturesLayer, this.ol_Active_Interactions)
             break
           default:
@@ -208,16 +225,17 @@
     },
     mounted () {
       this.ol_view = getOlView(this.center, this.zoom)
+      if (DEV) console.log(`geoJSONUrl : ${geoJSONUrl}`)
       this.ol_map = getOlMap(this.$refs.mymap, this.ol_view)
       this.ol_geoJSONLayer = addGeoJSONPolygonLayer(this.ol_map, geoJSONUrl)
-      this.ol_map.addLayer(this.ol_geoJSONLayer)
+      // this.ol_map.addLayer(this.ol_geoJSONLayer)
       this.ol_newFeatures = new OlCollection()
       this.ol_newFeaturesLayer = initNewFeaturesLayer(this.ol_map, this.ol_newFeatures)
       this.ol_map.on(
         'click',
         (evt) => {
-          console.log(`## GoMap click at : ${evt.coordinate[0]}, ${evt.coordinate[1]}`)
-          console.log(`** Il y a ${getNumberFeaturesInLayer(this.ol_newFeaturesLayer)} polygones`)
+          console.log(`## GoMap click at: ${Number(evt.coordinate[0]).toFixed(2)},${Number(evt.coordinate[1]).toFixed(2)}`)
+          console.log(`** Il y a ${getWktGeometryFeaturesInLayer(this.ol_newFeaturesLayer)} polygones`)
           if (this.uiMode === 'NAVIGATE') {
             this.ol_map.forEachFeatureAtPixel(evt.pixel, (feature, layer) => {
               console.log(`## GoMap click evt feature detected : `, feature)

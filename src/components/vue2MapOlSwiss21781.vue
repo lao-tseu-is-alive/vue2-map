@@ -114,7 +114,9 @@
     setModifyMode,
     setTranslateMode,
     getNumberFeaturesInLayer,
-    getWktGeometryFeaturesInLayer
+    getWktGeometryFeaturesInLayer,
+    dumpFeatureToString,
+    addWktPolygonToLayer
   } from './OpenLayersSwiss21781'
   import {Radio} from 'vue-checkbox-radio'
 
@@ -130,6 +132,7 @@
         ol_map: null,
         ol_view: null,
         ol_geoJSONLayer: null,
+        maxFeatureIdCounter: 0, // to give an id to polygon features
         ol_newFeatures: null, // ol collection of features used as vector source for CREATE mode
         ol_newFeaturesLayer: null, // Vector Layer for storing new features
         ol_Active_Interactions: [],
@@ -148,6 +151,15 @@
       baseLayer: {
         type: String,
         default: 'fonds_geo_osm_bdcad_couleur'
+      },
+      geomWkt: {
+        type: String,
+        default: null
+      }
+    },
+    watch: {
+      geomWkt: function () {
+        this._updateGeometry()
       }
     },
     computed: {
@@ -156,6 +168,19 @@
       }
     },
     methods: {
+      _updateGeometry: function () {
+        if (!isNullOrUndefined(this.geomWkt)) {
+          const numFeaturesAdded = addWktPolygonToLayer(this.ol_newFeaturesLayer, this.geomWkt, this.maxFeatureIdCounter)
+          if (DEV) {
+            if (isNullOrUndefined(numFeaturesAdded)) {
+              console.log(`# ERROR tying to add this invalid Geom : ${this.geomWkt}`, this.geomWkt)
+            } else {
+              console.log(`Successfully added this geom : ${this.geomWkt} to layer now layer has ${numFeaturesAdded} features !`)
+              this.maxFeatureIdCounter += numFeaturesAdded
+            }
+          }
+        }
+      },
       changeLayer: function (event) {
         let selectedLayer = event.target.value
         let layers = this.ol_map.getLayers()
@@ -186,24 +211,26 @@
               this.ol_newFeatures,
               this.ol_Active_Interactions,
               (newGeom) => {
+                // here is a good place to save geometry
+                const formatWKT = new OlFormatWKT()
+                let featureWKTGeometry = formatWKT.writeFeature(newGeom)
                 if (DEV) {
                   console.log(`## in changeMode callback for setCreateMode`, newGeom)
-                  const formatWKT = new OlFormatWKT()
-                  let featureWKTGeometry = formatWKT.writeFeature(newGeom)
                   console.log(`** newGeom in wkt format : ${featureWKTGeometry}`)
-                  this.$emit('gomapnewgeom', featureWKTGeometry)
                 }
-                // here is a good place to save geometry
+                this.$emit('gomapnewgeom', featureWKTGeometry)
               })
             break
           case 'EDIT':
             setModifyMode(this.ol_map, this.ol_newFeaturesLayer, this.ol_Active_Interactions,
               (newGeom) => {
+                // here is a good place to save geometry
+                // const formatWKT = new OlFormatWKT()
+                // let featureWKTGeometry = formatWKT.writeFeature(newGeom)
                 if (DEV) {
                   console.log(`## in changeMode callback for setModifyMode`, newGeom)
-                  console.log(`** Il y a ${getNumberFeaturesInLayer(this.ol_newFeaturesLayer)} polygones`)
+                  // console.log(`** newGeom in wkt format : ${featureWKTGeometry}`)
                 }
-                // here is a good place to save geometry
               })
             break
           case 'TRANSLATE':
@@ -225,21 +252,27 @@
     },
     mounted () {
       this.ol_view = getOlView(this.center, this.zoom)
-      if (DEV) console.log(`geoJSONUrl : ${geoJSONUrl}`)
+      if (DEV) {
+        // console.log(`geoJSONUrl : ${geoJSONUrl}`)
+        console.log(`geomWkt : ${this.geomWkt}`)
+      }
       this.ol_map = getOlMap(this.$refs.mymap, this.ol_view)
       this.ol_geoJSONLayer = addGeoJSONPolygonLayer(this.ol_map, geoJSONUrl)
       // this.ol_map.addLayer(this.ol_geoJSONLayer)
       this.ol_newFeatures = new OlCollection()
       this.ol_newFeaturesLayer = initNewFeaturesLayer(this.ol_map, this.ol_newFeatures)
+      this._updateGeometry()
       this.ol_map.on(
         'click',
         (evt) => {
-          console.log(`## GoMap click at: ${Number(evt.coordinate[0]).toFixed(2)},${Number(evt.coordinate[1]).toFixed(2)}`)
-          console.log(`** Il y a ${getWktGeometryFeaturesInLayer(this.ol_newFeaturesLayer)} polygones`)
+          if (DEV) {
+            console.log(`## GoMap click at: ${Number(evt.coordinate[0]).toFixed(2)},${Number(evt.coordinate[1]).toFixed(2)}`)
+            console.log(`** BEGIN LAYER CONTENTS **\n${getWktGeometryFeaturesInLayer(this.ol_newFeaturesLayer)}\n** END LAYER CONTENTS **`)
+          }
           if (this.uiMode === 'NAVIGATE') {
             this.ol_map.forEachFeatureAtPixel(evt.pixel, (feature, layer) => {
-              console.log(`## GoMap click evt feature detected : `, feature)
-              if (!isNullOrUndefined(layer))console.log(`   feature found in layer : `, layer)
+              console.log(`## GoMap click evt feature detected : \n${dumpFeatureToString(feature)}`, feature)
+              if (!isNullOrUndefined(layer)) console.log(`   feature found in layer : `, layer)
               console.log(dumpObject2String(feature.getProperties()))
               this.$emit('selfeature', feature)
             })
@@ -248,7 +281,7 @@
           }
         })
       window.onresize = () => {
-        console.log(`## GoMap resize`, this.ol_map)
+        // console.log(`## GoMap resize`, this.ol_map)
         // this.$refs.mymap.clientHeight = window.innerHeight - 60
         this.ol_map.updateSize()
       }

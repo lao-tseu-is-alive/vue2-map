@@ -3,6 +3,7 @@ import {functionExist, isNullOrUndefined} from './lib/htmlUtils'
 import OlMap from 'ol/map'
 import OlView from 'ol/view'
 import OlAttribution from 'ol/attribution'
+import OlCollection from 'ol/collection'
 import OlCircle from 'ol/style/circle'
 import olEventsCondition from 'ol/events/condition'
 import OlFeature from 'ol/feature'
@@ -255,7 +256,7 @@ export function getOlMap (divMap, olView) {
 }
 
 export function addGeoJSONPolygonLayer (olMap, geojsonUrl, loadCompleteCallback) {
-  if (DEV) console.log(`# in addGeoJSONPolygonLayer creating Layer : ${geojsonUrl}`)
+  // if (DEV) console.log(`# in addGeoJSONPolygonLayer creating Layer : ${geojsonUrl}`)
   const vectorSource = new OlSourceVector({
     url: geojsonUrl,
     format: new OlGeoJSON({
@@ -312,11 +313,11 @@ export function initNewFeaturesLayer (olMap, olFeatures) {
     source: new OlSourceVector({features: olFeatures}),
     style: new OlStyle({
       fill: new OlFill({
-        color: 'rgba(255, 255, 255, 0.2)'
+        color: 'rgba(255, 0, 0, 0.2)'
       }),
       stroke: new OlStroke({
-        color: '#ffcc33',
-        width: 2
+        color: '#ffee00',
+        width: 5
       }),
       image: new OlCircle({
         radius: 10,
@@ -332,7 +333,6 @@ export function initNewFeaturesLayer (olMap, olFeatures) {
 }
 
 export function setCreateMode (olMap, olFeatures, arrInteractionsStore, endCreateCallback) {
-  let multiPolygon = new OlMultiPolygon([])
   const modify = new OlInteractionModify({
     features: olFeatures,
     // the SHIFT key must be pressed to delete vertices, so
@@ -350,6 +350,7 @@ export function setCreateMode (olMap, olFeatures, arrInteractionsStore, endCreat
     type: 'Polygon' /** @type {ol.geom.GeometryType} */
   })
   draw.on('drawend', function (e) {
+    let multiPolygon = new OlMultiPolygon([])
     let currentFeature = e.feature // this is the feature fired the event
     let currentPolygon = currentFeature.getGeometry()
     multiPolygon.appendPolygon(currentPolygon)
@@ -391,7 +392,7 @@ export function setModifyMode (olMap, olLayer2Edit, arrInteractionsStore, endMod
     }),
     new OlStyle({
       image: new OlCircle({
-        radius: 5,
+        radius: 7,
         fill: new OlFill({
           color: 'orange'
         })
@@ -409,28 +410,53 @@ export function setModifyMode (olMap, olLayer2Edit, arrInteractionsStore, endMod
     wrapX: false,
     style: modifyStyles // overlayStyle
   })
+  /*
+    The modify interaction does not listen to geometry change events.
+    Changing the feature coordinates will make the modify interaction
+    unaware of the actual feature coordinates.
+    A possible fix: Maintain a collection used by Modify, so we can reload
+    the features manually. This collection will always contain the same
+    features as the select interaction.
+  */
+  let selectSource = new OlCollection()
+  select.on('select', function (evt) {
+    evt.selected.forEach(function (feature) {
+      selectSource.push(feature)
+    })
+    evt.deselected.forEach(function (feature) {
+      selectSource.remove(feature)
+    })
+  })
   let modify = new OlInteractionModify({
-    features: select.getFeatures()
+    features: selectSource  // use our custom collection instead of select.getFeatures()
+  })
+  let originalCoordinates = {}
+  modify.on('modifystart', function (evt) {
+    evt.features.forEach(function (feature) {
+      originalCoordinates[feature] = feature.getGeometry().getCoordinates()
+    })
   })
   modify.on('modifyend', function (e) {
     console.log(`INSIDE setModifyMode event modifyend : `, e)
-    // let currentFeature = e.feature // this is the feature fired the event
-    /*
-    let currentPolygon = currentFeature.getGeometry()
-    multiPolygon.appendPolygon(currentPolygon)
-    // TODO here is where i may check the validity of the new polygon
+    let currentFeatures = e.features.getArray()
     const formatWKT = new OlFormatWKT()
-    let multiPolygonFeature = new OlFeature({
-      geometry: multiPolygon
+    currentFeatures.forEach(function (feature) {
+      // here we can check if point move is legal or not
+      if (feature in originalCoordinates && Math.random() > 0.5) {
+        feature.getGeometry().setCoordinates(originalCoordinates[feature])
+        delete originalCoordinates[feature]
+        // remove and re-add the feature to make Modify reload it's geometry
+        selectSource.remove(feature)
+        selectSource.push(feature)
+      }
+      let featureWKTGeometry = formatWKT.writeFeature(feature)
+      if (DEV) {
+        console.log(`INSIDE setModifyMode event modifyend : ${featureWKTGeometry}`)
+      }
     })
-    if (DEV) {
-      let featureWKTGeometry = formatWKT.writeFeature(multiPolygonFeature)
-      console.log(`INSIDE setModifyMode event modifyend : ${featureWKTGeometry}`)
-    }
     if (functionExist(endModifyCallback)) {
-      endModifyCallback(multiPolygonFeature)
+      endModifyCallback(currentFeatures)
     }
-    */
   })
   olMap.addInteraction(select)
   olMap.addInteraction(modify)
@@ -485,14 +511,74 @@ export function getWktGeometryFeaturesInLayer (olLayer) {
   if (isNullOrUndefined(olLayer)) {
     return null
   } else {
+    if (DEV) { console.log(`--> getWktGeometryFeaturesInLayer :`, olLayer) }
     let source = olLayer.getSource()
     let arrFeatures = source.getFeatures()
+    if (DEV) { console.log(`--> found ${arrFeatures.length} Features`) }
     let strGeom = ''
-    for (let i = 0; i < arrFeatures.length; i++) {
-      if (DEV) console.log(arrFeatures[i], arrFeatures[i].getGeometry())
-      strGeom += ``
+    if (arrFeatures.length > 0) {
+      const formatWKT = new OlFormatWKT()
+      for (let i = 0; i < arrFeatures.length; i++) {
+        let featureWKTGeometry = formatWKT.writeFeature(arrFeatures[i])
+        let geometryType = arrFeatures[i].getGeometry().getType().toUpperCase()
+        let rev = arrFeatures[i].getRevision()
+        let id = arrFeatures[i].getId()
+        let featureString = `${geometryType} Feature [${i}] id=${id}  : (rev ${rev}) -\n${featureWKTGeometry}\n`
+        if (DEV) {
+          // console.log(`${featureString}`)
+        }
+        strGeom += featureString
+      }
     }
     return strGeom
   }
 }
 
+export function dumpFeatureToString (olFeature) {
+  const formatWKT = new OlFormatWKT()
+  let featureWKTGeometry = formatWKT.writeFeature(olFeature)
+  let geometryType = olFeature.getGeometry().getType().toUpperCase()
+  let rev = olFeature.getRevision()
+  let id = olFeature.getId()
+  let featureString = `${geometryType} Feature id=${id}  : (rev ${rev}) -\n${featureWKTGeometry}\n`
+  return featureString
+}
+
+export function addWktPolygonToLayer (olLayer, wktGeometry, baseCounter) {
+  if (isNullOrUndefined(olLayer)) {
+    return null
+  } else {
+    let id = 0
+    let source = olLayer.getSource()
+    const formatWKT = new OlFormatWKT()
+    let feature = formatWKT.readFeature(wktGeometry, {
+      dataProjection: 'EPSG:21781',
+      featureProjection: 'EPSG:21781'
+    })
+    let geometryType = feature.getGeometry().getType().toUpperCase()
+    switch (geometryType) {
+      case 'MULTIPOLYGON':
+        // let's add the polygons
+        feature.getGeometry().getPolygons().forEach(function (polygon) {
+          // console.log('## addWktPolygonToLayer found polygon :', polygon)
+          let polygonFeature = new OlFeature({
+            geometry: polygon
+          })
+          id += 1 // increment counter
+          polygonFeature.setId(id + baseCounter)
+          source.addFeature(polygonFeature)
+        })
+        break
+      case 'POLYGON':
+        // let's use this one as it is
+        id += 1 // increment counter
+        feature.setId(id + baseCounter)
+        source.addFeature(feature)
+        break
+      default:
+        console.log('## Error only MULTIPOLIGON and POLYGON are supported here')
+        return null
+    }
+    return id
+  }
+}

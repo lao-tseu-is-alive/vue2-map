@@ -175,7 +175,7 @@
             if (isNullOrUndefined(numFeaturesAdded)) {
               console.log(`# ERROR tying to add this invalid Geom : ${this.geomWkt}`, this.geomWkt)
             } else {
-              console.log(`Successfully added this geom : ${this.geomWkt} to layer now layer has ${numFeaturesAdded} features !`)
+              console.log(`Successfully added this geomWT to layer now layer has ${numFeaturesAdded} features !`)
               this.maxFeatureIdCounter += numFeaturesAdded
             }
           }
@@ -226,8 +226,6 @@
             setModifyMode(this.ol_map, this.ol_newFeaturesLayer, this.ol_Active_Interactions,
               (newGeom) => {
                 // here is a good place to save geometry
-                // const formatWKT = new OlFormatWKT()
-                // let featureWKTGeometry = formatWKT.writeFeature(newGeom)
                 if (DEV) {
                   console.log(`## in changeMode callback for setModifyMode`, newGeom)
                   // console.log(`** newGeom in wkt format : ${featureWKTGeometry}`)
@@ -235,6 +233,7 @@
               })
             break
           case 'TRANSLATE':
+            // TODO simplify precision of coords after a translate
             setTranslateMode(this.ol_map, this.ol_newFeaturesLayer, this.ol_Active_Interactions)
             break
           default:

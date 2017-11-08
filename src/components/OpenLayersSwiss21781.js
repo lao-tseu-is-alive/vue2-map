@@ -1,5 +1,4 @@
 import {DEV} from './config'
-// import * as jsts from './lib/jsts.min'
 import {functionExist, isNullOrUndefined} from './lib/htmlUtils'
 import OlMap from 'ol/map'
 import OlView from 'ol/view'
@@ -30,7 +29,8 @@ import OlSourceWMTS from 'ol/source/wmts'
 import OlStroke from 'ol/style/stroke'
 import OlStyle from 'ol/style/style'
 import OlTileGridWMTS from 'ol/tilegrid/wmts'
-// import JstsOl3Parser from 'jsts/org/locationtech/jts/io/OL3Parser'
+import WKTReader from 'jsts/org/locationtech/jts/io/WKTReader'
+import IsSimpleOp from 'jsts/org/locationtech/jts/operation/IsSimpleOp'
 // import JstsPoly from 'jsts/org/locationtech/jts/geom/Polygon'
 import proj4 from 'proj4'
 export const PRECISION = 10
@@ -528,6 +528,11 @@ export function getNumberFeaturesInLayer (olLayer) {
   }
 }
 
+export function getWktGeomFromFeature (olFeature) {
+  const formatWKT = new OlFormatWKT()
+  return formatWKT.writeFeature(olFeature)
+}
+
 export function getWktGeometryFeaturesInLayer (olLayer) {
   if (isNullOrUndefined(olLayer)) {
     return null
@@ -538,16 +543,8 @@ export function getWktGeometryFeaturesInLayer (olLayer) {
     if (DEV) { console.log(`--> found ${arrFeatures.length} Features`) }
     let strGeom = ''
     if (arrFeatures.length > 0) {
-      const formatWKT = new OlFormatWKT()
       for (let i = 0; i < arrFeatures.length; i++) {
-        let featureWKTGeometry = formatWKT.writeFeature(arrFeatures[i])
-        let geometryType = arrFeatures[i].getGeometry().getType().toUpperCase()
-        let rev = arrFeatures[i].getRevision()
-        let id = arrFeatures[i].getId()
-        let featureString = `${geometryType} Feature [${i}] id=${id}  : (rev ${rev}) -\n${featureWKTGeometry}\n`
-        if (DEV) {
-          // console.log(`${featureString}`)
-        }
+        let featureString = dumpFeatureToString(arrFeatures[i])
         strGeom += featureString
       }
     }
@@ -560,8 +557,7 @@ export function getWktGeometryFeaturesInLayer (olLayer) {
  * @return {string} : the string representation of this feature
  */
 export function dumpFeatureToString (olFeature) {
-  const formatWKT = new OlFormatWKT()
-  let featureWKTGeometry = formatWKT.writeFeature(olFeature)
+  let featureWKTGeometry = getWktGeomFromFeature(olFeature)
   let geometryType = olFeature.getGeometry().getType().toUpperCase()
   let rev = olFeature.getRevision()
   let id = olFeature.getId()
@@ -573,6 +569,7 @@ export function addWktPolygonToLayer (olLayer, wktGeometry, baseCounter) {
   if (isNullOrUndefined(olLayer)) {
     return null
   } else {
+    // TODO add a call to isValidPolygon before importing
     let id = 0
     let source = olLayer.getSource()
     const formatWKT = new OlFormatWKT()
@@ -589,16 +586,24 @@ export function addWktPolygonToLayer (olLayer, wktGeometry, baseCounter) {
           let polygonFeature = new OlFeature({
             geometry: polygon
           })
-          id += 1 // increment counter
-          polygonFeature.setId(id + baseCounter)
-          source.addFeature(polygonFeature)
+          if (isValidPolygon(polygonFeature)) {
+            id += 1 // increment counter
+            polygonFeature.setId(id + baseCounter)
+            source.addFeature(polygonFeature)
+          } else {
+            console.log('## Error POLYGON IS NOT VALID')
+          }
         })
         break
       case 'POLYGON':
-        // let's use this one as it is
-        id += 1 // increment counter
-        feature.setId(id + baseCounter)
-        source.addFeature(feature)
+        if (isValidPolygon(feature)) {
+          // let's use this one as it is
+          id += 1 // increment counter
+          feature.setId(id + baseCounter)
+          source.addFeature(feature)
+        } else {
+          console.log('## Error POLYGON IS NOT VALID')
+        }
         break
       default:
         console.log('## Error only MULTIPOLIGON and POLYGON are supported here')
@@ -634,7 +639,7 @@ export function isPointDistanceOkForPolygon (p0, p1) {
  * Allow to check if an OpenLayers Polygon is valid:
  * 0) the feature is of type Polygon
  * 1) No point of the polygons are nearest then MIN_DISTANCE_BETWEEN_POINTS of another point of this polygon
- * 2) No self-intersection
+ * 2) No self-intersection etc like topologically valid, according to the OGC SFS specification
  * 3) No point of the polygons are inside another polygon
  * @param {ol.Feature} olFeature : the feature of geometry type Polygon you want to check
  * @param {array} clickPoint : 2d array with x,y coordinates of last point modified
@@ -645,6 +650,7 @@ export function isValidPolygon (olFeature, clickPoint = null) {
   let geometryType = geometry.getType().toUpperCase()
   if (geometryType === 'POLYGON') {
     // let's check first condition 1 no point are nearest then tolerance
+    // TODO try to do it without clickPoint
     let coords = geometry.getCoordinates()
     console.log('## isValidPolygon : Polygon Coords', coords)
     let exteriorRingCoords = geometry.getLinearRing(0).getCoordinates()
@@ -664,17 +670,23 @@ export function isValidPolygon (olFeature, clickPoint = null) {
           return false
         }
       }
-      // not let's check for condition 2
-      /*
-      let parser = new jsts.io.OL3Parser()
-      let jstsGeom = parser.read(geometry)
-      if (!jstsGeom.isValid()) {
-        console.log('## isValidPolygon : jstsGeom.isValid() is FALSE')
-        return false
-      }
-      */
-      return true
     }
+    // not let's check for condition 2
+    // not using OL3Parser because it adds a bunch of OL dependencies
+    let parser = new WKTReader()
+    let jstsGeom = parser.read(getWktGeomFromFeature(olFeature))
+    // https://bjornharrtell.github.io/jsts/doc/api/jsts.geom.Polygon.html
+    console.log('## isValidPolygon : jstsGeom = ', jstsGeom)
+    const isSimpleOp = new IsSimpleOp()
+    let isSimple = isSimpleOp.isSimplePolygonal(jstsGeom)
+    console.log('## isValidPolygon : isSimpleOp.isSimplePolygonal(jstsGeom) = ', isSimple)
+    if (!isSimple) {
+      console.log('## isValidPolygon : THIS POLYGON IS NOT VALID')
+      return false
+    }
+    // not let's check for condition 3
+
+    return true
   } else {
     console.log('## isValidPolygon : only POLYGON features can be tested here')
     return false

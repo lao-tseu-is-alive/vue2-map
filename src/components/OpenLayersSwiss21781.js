@@ -1,4 +1,5 @@
 import {DEV} from './config'
+// import * as jsts from './lib/jsts.min'
 import {functionExist, isNullOrUndefined} from './lib/htmlUtils'
 import OlMap from 'ol/map'
 import OlView from 'ol/view'
@@ -29,7 +30,14 @@ import OlSourceWMTS from 'ol/source/wmts'
 import OlStroke from 'ol/style/stroke'
 import OlStyle from 'ol/style/style'
 import OlTileGridWMTS from 'ol/tilegrid/wmts'
+// import JstsOl3Parser from 'jsts/org/locationtech/jts/io/OL3Parser'
+// import JstsPoly from 'jsts/org/locationtech/jts/geom/Polygon'
 import proj4 from 'proj4'
+export const PRECISION = 10
+export const EPSILON = Number(`1e-${PRECISION}`)  // 1e-10 or 0.0000000001
+// in EPSG:21781 we don't want to allow points of same polygon in same cm
+export const MIN_DISTANCE_BETWEEN_POINTS = 0.5
+export const DIGITIZE_PRECISION = 2 // cm is enough in EPSG:21781
 
 proj4.defs('EPSG:21781', '+proj=somerc +lat_0=46.95240555555556 +lon_0=7.439583333333333 +k_0=1 +x_0=600000 +y_0=200000 +ellps=bessel +towgs84=674.4,15.1,405.3,0,0,0,0 +units=m +no_defs')
 /*
@@ -132,9 +140,9 @@ const overlayStyle = (function () {
 
 /**
  * Allow to retrieve a valid OpenLayers WMTS source object
- * @param {string} layer  the name of the WMTS layer
+ * @param {string} layer  : the name of the WMTS layer
  * @param {object} options
- * @return {ol.source.WMTS} a valid OpenLayers WMTS source
+ * @return {ol.source.WMTS} : a valid OpenLayers WMTS source
  */
 function wmtsLausanneSource (layer, options) {
   let resolutions = RESOLUTIONS
@@ -218,7 +226,7 @@ function initWmtsLayers () {
  * creates an OpenLayers View Object
  * @param {array} centerView : an array [x,y] representing initial initial center of the view
  * @param {number} zoomView : an integer from 1 to 12 representing the level of zoom
- * @returns {ol.View} : the OpenLayers Vew object
+ * @returns {ol.View} : the OpenLayers View object
  */
 export function getOlView (centerView = [537892.8, 152095.7], zoomView = 12) {
   return new OlView({
@@ -310,6 +318,7 @@ export function addGeoJSONPolygonLayer (olMap, geojsonUrl, loadCompleteCallback)
 
 export function initNewFeaturesLayer (olMap, olFeatures) {
   const newFeaturesLayer = new OlLayerVector({
+    name: 'ol_newFeaturesLayer',
     source: new OlSourceVector({features: olFeatures}),
     style: new OlStyle({
       fill: new OlFill({
@@ -332,7 +341,7 @@ export function initNewFeaturesLayer (olMap, olFeatures) {
   return newFeaturesLayer
 }
 
-export function setCreateMode (olMap, olFeatures, arrInteractionsStore, endCreateCallback) {
+export function setCreateMode (olMap, olFeatures, arrInteractionsStore, baseCounter, endCreateCallback) {
   const modify = new OlInteractionModify({
     features: olFeatures,
     // the SHIFT key must be pressed to delete vertices, so
@@ -349,19 +358,26 @@ export function setCreateMode (olMap, olFeatures, arrInteractionsStore, endCreat
     features: olFeatures, // vectorSource.getFeatures(), //TODO find the correct object to pass
     type: 'Polygon' /** @type {ol.geom.GeometryType} */
   })
+  var id = baseCounter + 1
   draw.on('drawend', function (e) {
     let multiPolygon = new OlMultiPolygon([])
     let currentFeature = e.feature // this is the feature fired the event
+    currentFeature.setId(id)
+    if (DEV) {
+      console.log(`INSIDE setCreateMode event drawend currentFeature: ${dumpFeatureToString(currentFeature)}`)
+    }
     let currentPolygon = currentFeature.getGeometry()
+    let exteriorRingCoords = currentPolygon.getLinearRing(0).getCoordinates()
+    .map((p) => p.map((v) => parseFloat(Number(v).toFixed(DIGITIZE_PRECISION))))
+    currentPolygon.setCoordinates([exteriorRingCoords], 'XY')
     multiPolygon.appendPolygon(currentPolygon)
-    // TODO here is where i may check the validity of the new polygon
-    const formatWKT = new OlFormatWKT()
     let multiPolygonFeature = new OlFeature({
       geometry: multiPolygon
     })
+    multiPolygonFeature.setId(id)
+    id = id + 1
     if (DEV) {
-      let featureWKTGeometry = formatWKT.writeFeature(multiPolygonFeature)
-      console.log(`INSIDE setCreateMode event drawend : ${featureWKTGeometry}`)
+      console.log(`INSIDE setCreateMode event drawend multiPolygonFeature: ${dumpFeatureToString(multiPolygonFeature)}`)
     }
     if (functionExist(endCreateCallback)) {
       endCreateCallback(multiPolygonFeature)
@@ -437,12 +453,17 @@ export function setModifyMode (olMap, olLayer2Edit, arrInteractionsStore, endMod
     })
   })
   modify.on('modifyend', function (e) {
-    console.log(`INSIDE setModifyMode event modifyend : `, e)
+    console.log(`-->INSIDE setModifyMode event modifyend : `, e)
+    let newPoint = e.mapBrowserEvent.coordinate // point of last click
     let currentFeatures = e.features.getArray()
     const formatWKT = new OlFormatWKT()
     currentFeatures.forEach(function (feature) {
-      // here we can check if point move is legal or not
-      if (feature in originalCoordinates && Math.random() > 0.5) {
+      let isItValid = isValidPolygon(feature, newPoint)
+      if (DEV) {
+        console.log(`--> in modifyend featureWKTGeometry=\n${dumpFeatureToString(feature)}`)
+        console.log(`--> in modifyend isValidPolygon=${isItValid}`)
+      }
+      if ((feature in originalCoordinates) && !isItValid) {
         feature.getGeometry().setCoordinates(originalCoordinates[feature])
         delete originalCoordinates[feature]
         // remove and re-add the feature to make Modify reload it's geometry
@@ -451,7 +472,7 @@ export function setModifyMode (olMap, olLayer2Edit, arrInteractionsStore, endMod
       }
       let featureWKTGeometry = formatWKT.writeFeature(feature)
       if (DEV) {
-        console.log(`INSIDE setModifyMode event modifyend : ${featureWKTGeometry}`)
+        console.log(`--> in modifyend featureWKTGeometry= ${featureWKTGeometry}`)
       }
     })
     if (functionExist(endModifyCallback)) {
@@ -511,7 +532,7 @@ export function getWktGeometryFeaturesInLayer (olLayer) {
   if (isNullOrUndefined(olLayer)) {
     return null
   } else {
-    if (DEV) { console.log(`--> getWktGeometryFeaturesInLayer :`, olLayer) }
+    if (DEV) { console.log(`--> getWktGeometryFeaturesInLayer `) }
     let source = olLayer.getSource()
     let arrFeatures = source.getFeatures()
     if (DEV) { console.log(`--> found ${arrFeatures.length} Features`) }
@@ -533,7 +554,11 @@ export function getWktGeometryFeaturesInLayer (olLayer) {
     return strGeom
   }
 }
-
+/**
+ * Allow to get a string representation of the feature
+ * @param {ol.Feature} olFeature : the feature of geometry type Polygon you want to dump
+ * @return {string} : the string representation of this feature
+ */
 export function dumpFeatureToString (olFeature) {
   const formatWKT = new OlFormatWKT()
   let featureWKTGeometry = formatWKT.writeFeature(olFeature)
@@ -580,5 +605,78 @@ export function addWktPolygonToLayer (olLayer, wktGeometry, baseCounter) {
         return null
     }
     return id
+  }
+}
+
+export function pointsIsEqual (p0, p1) {
+  return (
+    (Math.abs(p0[0] - p1[0]) <= EPSILON) &&
+    (Math.abs(p0[1] - p1[1]) <= EPSILON)
+  )
+}
+
+export function distance2Point (p0, p1) {
+  return (Math.sqrt(
+    ((p0[0] - p1[0]) * (p0[0] - p1[0])) +
+    ((p0[1] - p1[1]) * (p0[1] - p1[1]))
+    )
+  )
+}
+
+export function isPointDistanceOkForPolygon (p0, p1) {
+  let distance = distance2Point(p0, p1)
+  if (distance <= EPSILON) return true // comparing same point
+  if (distance > MIN_DISTANCE_BETWEEN_POINTS) return true
+  return false
+}
+
+/**
+ * Allow to check if an OpenLayers Polygon is valid:
+ * 0) the feature is of type Polygon
+ * 1) No point of the polygons are nearest then MIN_DISTANCE_BETWEEN_POINTS of another point of this polygon
+ * 2) No self-intersection
+ * 3) No point of the polygons are inside another polygon
+ * @param {ol.Feature} olFeature : the feature of geometry type Polygon you want to check
+ * @param {array} clickPoint : 2d array with x,y coordinates of last point modified
+ * @return {boolean} : true if the polygon is valid
+ */
+export function isValidPolygon (olFeature, clickPoint = null) {
+  let geometry = olFeature.getGeometry()
+  let geometryType = geometry.getType().toUpperCase()
+  if (geometryType === 'POLYGON') {
+    // let's check first condition 1 no point are nearest then tolerance
+    let coords = geometry.getCoordinates()
+    console.log('## isValidPolygon : Polygon Coords', coords)
+    let exteriorRingCoords = geometry.getLinearRing(0).getCoordinates()
+    .map((p) => p.map((v) => parseFloat(Number(v).toFixed(DIGITIZE_PRECISION))))
+    console.log('## isValidPolygon : Polygon Coords', exteriorRingCoords)
+    if (!isNullOrUndefined(clickPoint)) {
+      let newCoord = clickPoint.map((v) => parseFloat(Number(v).toFixed(DIGITIZE_PRECISION)))
+      console.log('## isValidPolygon : newCoord', newCoord)
+      for (let i = 0; i < exteriorRingCoords.length; i++) {
+        let p = exteriorRingCoords[i]
+        console.log(`Point ${i} [${p[0]},${p[1]}] = [${newCoord[0]},${newCoord[1]}] is ${pointsIsEqual(p, newCoord)}`)
+        console.log(` distance is ${distance2Point(p, newCoord).toFixed(DIGITIZE_PRECISION)}`)
+        if (isPointDistanceOkForPolygon(p, newCoord)) {
+          console.log('++++ POINT IS OKAY ++++')
+        } else {
+          console.log('---- POINT NOT OKAY ---')
+          return false
+        }
+      }
+      // not let's check for condition 2
+      /*
+      let parser = new jsts.io.OL3Parser()
+      let jstsGeom = parser.read(geometry)
+      if (!jstsGeom.isValid()) {
+        console.log('## isValidPolygon : jstsGeom.isValid() is FALSE')
+        return false
+      }
+      */
+      return true
+    }
+  } else {
+    console.log('## isValidPolygon : only POLYGON features can be tested here')
+    return false
   }
 }

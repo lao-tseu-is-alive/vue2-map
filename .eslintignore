@@ -1,3 +1,4 @@
 build/*.js
 config/*.js
 doc/*.js
+src/components/lib/jsts.min.js

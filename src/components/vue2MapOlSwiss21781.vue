@@ -210,6 +210,7 @@
               this.ol_map,
               this.ol_newFeatures,
               this.ol_Active_Interactions,
+              this.maxFeatureIdCounter,
               (newGeom) => {
                 // here is a good place to save geometry
                 const formatWKT = new OlFormatWKT()
@@ -254,7 +255,7 @@
       this.ol_view = getOlView(this.center, this.zoom)
       if (DEV) {
         // console.log(`geoJSONUrl : ${geoJSONUrl}`)
-        console.log(`geomWkt : ${this.geomWkt}`)
+        // console.log(`geomWkt : ${this.geomWkt}`)
       }
       this.ol_map = getOlMap(this.$refs.mymap, this.ol_view)
       this.ol_geoJSONLayer = addGeoJSONPolygonLayer(this.ol_map, geoJSONUrl)
@@ -272,7 +273,7 @@
           if (this.uiMode === 'NAVIGATE') {
             this.ol_map.forEachFeatureAtPixel(evt.pixel, (feature, layer) => {
               console.log(`## GoMap click evt feature detected : \n${dumpFeatureToString(feature)}`, feature)
-              if (!isNullOrUndefined(layer)) console.log(`   feature found in layer : `, layer)
+              if (!isNullOrUndefined(layer)) console.log(`   feature found in layer : `, layer.get('name'))
               console.log(dumpObject2String(feature.getProperties()))
               this.$emit('selfeature', feature)
             })
@@ -284,6 +285,7 @@
         // console.log(`## GoMap resize`, this.ol_map)
         // this.$refs.mymap.clientHeight = window.innerHeight - 60
         this.ol_map.updateSize()
+        document.getElementById()
       }
     }
   }

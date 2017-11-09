@@ -67,17 +67,6 @@
 
     <div ref="mytoolbar" class="map-toolbar">
       <button id="cmdClear" class="map-control" @click="clearNewFeatures">Clear</button>
-      <!--
-      <radio name="robot" value="navigate" v-model="uiMode" checked>
-        NAVIGATION
-      </radio>
-      <radio name="robot" value="create" v-model="uiMode">
-        CREATION
-      </radio>
-      <radio name="robot" value="edit" v-model="uiMode">
-        EDITION
-      </radio>
-      -->
       <select id="modeSelector" class="ol-mode-selector map-control"
               v-on:change="changeMode" v-model="uiMode"
               title="Cliquez pour sélectionner le mode de travail">
@@ -118,13 +107,12 @@
     dumpFeatureToString,
     addWktPolygonToLayer
   } from './OpenLayersSwiss21781'
-  import {Radio} from 'vue-checkbox-radio'
 
   const positionGareLausanne = [537892.8, 152095.7]
 
   export default {
     name: 'vue2MapOlSwiss21781',
-    components: {Radio},
+    components: {},
     data () {
       return {
         msg: 'Basic OpenLayers Map',

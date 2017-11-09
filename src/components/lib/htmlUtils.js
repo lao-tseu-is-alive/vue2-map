@@ -34,8 +34,8 @@ export const dateIso2Fr = function (strIsoDate) {
   } else {
     let y = null
     let m = null
-    let d = null
-      [y, m, d] = strIsoDate.split('-')
+    let d = null;
+    [y, m, d] = strIsoDate.split('-')
     return [d, m, y].join('-')
   }
 }
@@ -46,7 +46,7 @@ export const dateFr2Iso = function (strddmmyyyy) {
   } else {
     let y = null
     let m = null
-    let d = null
+    let d = null;
     [d, m, y] = strddmmyyyy.split('-')
     return [y, m, d].join('-')
   }
@@ -91,4 +91,3 @@ export const addImg = function (image, height, width, idElement) {
   elem.setAttribute('alt', 'logo')
   document.getElementById(idElement).appendChild(elem)
 }
-

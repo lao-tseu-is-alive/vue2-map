@@ -1,0 +1,3 @@
+[submodule "src/components/jsts"]
+	path = src/components/jsts
+	url = https://github.com/lao-tseu-is-alive/jsts.git

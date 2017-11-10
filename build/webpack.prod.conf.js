@@ -41,9 +41,17 @@ const webpackConfig = merge(baseWebpackConfig, {
       },
       sourceMap: false
     }),
-    */
-    // new MinifyPlugin(),
 
+    new MinifyPlugin(
+      { // minifyOpts https://github.com/babel/minify/tree/master/packages/babel-preset-minify#options
+        deadcode: true,
+        mangle: true
+      },
+      {
+        comments: false
+      }
+      ),
+    */
     // extract css into its own file
     new ExtractTextPlugin({
       filename: utils.assetsPath('css/[name].[contenthash].css')

@@ -301,7 +301,6 @@ export function addGeoJSONPolygonLayer (olMap, geojsonUrl, loadCompleteCallback)
       // TODO maybe add "loading icon" and here where to hide it
       // retrieve extent of all features to zoom only when loading of the layer via Ajax XHR is complete
       let extent = newLayer.getSource().getExtent()
-      // TODO activate insert/edit toolbar buttons only when layer has finished loading
       if (DEV) {
         console.log(`# Finished Loading Layer : ${geojsonUrl}`, e)
       }
@@ -355,7 +354,7 @@ export function setCreateMode (olMap, olFeatures, arrInteractionsStore, baseCoun
   olMap.addInteraction(modify)
   arrInteractionsStore.push(modify)
   const draw = new OlInteractionDraw({
-    features: olFeatures, // vectorSource.getFeatures(), //TODO find the correct object to pass
+    features: olFeatures, // vectorSource.getFeatures(),
     type: 'Polygon' /** @type {ol.geom.GeometryType} */
   })
   var id = baseCounter + 1
@@ -569,7 +568,6 @@ export function addWktPolygonToLayer (olLayer, wktGeometry, baseCounter) {
   if (isNullOrUndefined(olLayer)) {
     return null
   } else {
-    // TODO add a call to isValidPolygon before importing
     let id = 0
     let source = olLayer.getSource()
     const formatWKT = new OlFormatWKT()
@@ -606,7 +604,7 @@ export function addWktPolygonToLayer (olLayer, wktGeometry, baseCounter) {
         }
         break
       default:
-        console.log('## Error only MULTIPOLIGON and POLYGON are supported here')
+        console.log('## Error only MULTIPOLYGON and POLYGON are supported here')
         return null
     }
     return id

@@ -9,7 +9,6 @@ const CopyWebpackPlugin = require('copy-webpack-plugin')
 const HtmlWebpackPlugin = require('html-webpack-plugin')
 const ExtractTextPlugin = require('extract-text-webpack-plugin')
 const OptimizeCSSPlugin = require('optimize-css-assets-webpack-plugin')
-// const MinifyPlugin = require('babel-minify-webpack-plugin')
 
 const env = process.env.NODE_ENV === 'testing'
   ? require('../config/test.env')
@@ -34,24 +33,17 @@ const webpackConfig = merge(baseWebpackConfig, {
       'process.env': env
     }),
     // UglifyJs do not support ES6+, you can also use babel-minify for better treeshaking: https://github.com/babel/minify
-    /* fucked out by cgil
     new webpack.optimize.UglifyJsPlugin({
+      output: {
+        comments: false
+      },
       compress: {
-        warnings: false
+        drop_console: true,
+        warnings: true
       },
       sourceMap: false
     }),
 
-    new MinifyPlugin(
-      { // minifyOpts https://github.com/babel/minify/tree/master/packages/babel-preset-minify#options
-        deadcode: true,
-        mangle: true
-      },
-      {
-        comments: false
-      }
-      ),
-    */
     // extract css into its own file
     new ExtractTextPlugin({
       filename: utils.assetsPath('css/[name].[contenthash].css')

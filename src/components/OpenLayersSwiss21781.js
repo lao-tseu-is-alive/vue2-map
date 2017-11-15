@@ -29,10 +29,8 @@ import OlSourceWMTS from 'ol/source/wmts'
 import OlStroke from 'ol/style/stroke'
 import OlStyle from 'ol/style/style'
 import OlTileGridWMTS from 'ol/tilegrid/wmts'
-import WKTReader from './jsts/src/org/locationtech/jts/io/WKTReader'
-import IsSimpleOp from './jsts/src/org/locationtech/jts/operation/IsSimpleOp'
-// import JstsPoly from 'jsts/org/locationtech/jts/geom/Polygon'
 import proj4 from 'proj4'
+import {polygonSelfIntersect} from './lib/2dGeom'
 export const PRECISION = 10
 export const EPSILON = Number(`1e-${PRECISION}`)  // 1e-10 or 0.0000000001
 // in EPSG:21781 we don't want to allow points of same polygon in same cm
@@ -670,15 +668,9 @@ export function isValidPolygon (olFeature, clickPoint = null) {
       }
     }
     // not let's check for condition 2
-    // not using OL3Parser because it adds a bunch of OL dependencies
-    let parser = new WKTReader()
-    let jstsGeom = parser.read(getWktGeomFromFeature(olFeature))
-    // https://bjornharrtell.github.io/jsts/doc/api/jsts.geom.Polygon.html
-    console.log('## isValidPolygon : jstsGeom = ', jstsGeom)
-    const isSimpleOp = new IsSimpleOp()
-    let isSimple = isSimpleOp.isSimplePolygonal(jstsGeom)
-    console.log('## isValidPolygon : isSimpleOp.isSimplePolygonal(jstsGeom) = ', isSimple)
-    if (!isSimple) {
+    let intersects = polygonSelfIntersect(exteriorRingCoords.reduce((r, s) => r.push(s[0], s[1]) && r, []))
+    console.log('## isValidPolygon : polygonSelfIntersect(arrCoords) = ', intersects)
+    if (intersects) {
       console.log('## isValidPolygon : THIS POLYGON IS NOT VALID')
       return false
     }

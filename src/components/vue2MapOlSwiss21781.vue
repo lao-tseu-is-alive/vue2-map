@@ -269,10 +269,8 @@
           }
         })
       window.onresize = () => {
-        // console.log(`## GoMap resize`, this.ol_map)
         // this.$refs.mymap.clientHeight = window.innerHeight - 60
         this.ol_map.updateSize()
-        document.getElementById()
       }
     }
   }

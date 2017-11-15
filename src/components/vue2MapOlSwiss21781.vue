@@ -104,8 +104,10 @@
     setTranslateMode,
     getNumberFeaturesInLayer,
     getWktGeometryFeaturesInLayer,
+    getMultiPolygonWktGeometryFromPolygonFeaturesInLayer,
     dumpFeatureToString,
-    addWktPolygonToLayer
+    addWktPolygonToLayer,
+    isValidPolygon
   } from './OpenLayersSwiss21781'
 
   const positionGareLausanne = [537892.8, 152095.7]
@@ -117,6 +119,7 @@
       return {
         msg: 'Basic OpenLayers Map',
         uiMode: 'NAVIGATE',
+        ol_interaction_draw: null,
         ol_map: null,
         ol_view: null,
         ol_geoJSONLayer: null,
@@ -194,7 +197,7 @@
           case 'NAVIGATE':
             break
           case 'CREATE':
-            setCreateMode(
+            this.ol_interaction_draw = setCreateMode(
               this.ol_map,
               this.ol_newFeatures,
               this.ol_Active_Interactions,
@@ -207,7 +210,8 @@
                   console.log(`## in changeMode callback for setCreateMode`, newGeom)
                   console.log(`** newGeom in wkt format : ${featureWKTGeometry}`)
                 }
-                this.$emit('gomapnewgeom', featureWKTGeometry)
+                let wkt = getMultiPolygonWktGeometryFromPolygonFeaturesInLayer(this.ol_newFeaturesLayer)
+                this.$emit('gomapgeomchanged', wkt)
               })
             break
           case 'EDIT':
@@ -217,6 +221,10 @@
                 if (DEV) {
                   console.log(`## in changeMode callback for setModifyMode`, newGeom)
                   // console.log(`** newGeom in wkt format : ${featureWKTGeometry}`)
+                  // TODO pass the multypolygon  in wkt
+                  let wkt = getMultiPolygonWktGeometryFromPolygonFeaturesInLayer(this.ol_newFeaturesLayer)
+                  this.$emit('gomapgeomchanged', wkt)
+                  console.log(`** BEGIN LAYER CONTENTS **\n${getWktGeometryFeaturesInLayer(this.ol_newFeaturesLayer)}\n** END LAYER CONTENTS **`)
                 }
               })
             break
@@ -250,12 +258,13 @@
       this.ol_newFeatures = new OlCollection()
       this.ol_newFeaturesLayer = initNewFeaturesLayer(this.ol_map, this.ol_newFeatures)
       this._updateGeometry()
-      this.ol_map.on(
-        'click',
+      this.ol_map.on('click',
         (evt) => {
           if (DEV) {
-            console.log(`## GoMap click at: ${Number(evt.coordinate[0]).toFixed(2)},${Number(evt.coordinate[1]).toFixed(2)}`)
-            console.log(`** BEGIN LAYER CONTENTS **\n${getWktGeometryFeaturesInLayer(this.ol_newFeaturesLayer)}\n** END LAYER CONTENTS **`)
+            console.log(`%c ## BEGIN GoMap click callback : ${Number(evt.coordinate[0]).toFixed(2)},${Number(evt.coordinate[1]).toFixed(2)}}`, 'background: #00f; color: #bada55')
+            // console.log(`** BEGIN LAYER CONTENTS **\n${getWktGeometryFeaturesInLayer(this.ol_newFeaturesLayer)}\n** END LAYER CONTENTS **`)
+            // let wkt = getMultiPolygonWktGeometryFromPolygonFeaturesInLayer(this.ol_newFeaturesLayer)
+            // console.log(wkt)
           }
           if (this.uiMode === 'NAVIGATE') {
             this.ol_map.forEachFeatureAtPixel(evt.pixel, (feature, layer) => {
@@ -265,8 +274,22 @@
               this.$emit('selfeature', feature)
             })
           } else {
+            if (this.uiMode === 'CREATE') {
+              if (!isNullOrUndefined(this.ol_interaction_draw)) {
+                if (this.ol_interaction_draw.getActive() === true) {
+                  let ok = isValidPolygon(this.ol_interaction_draw.currentFeature, evt.coordinate)
+                  if (ok) {
+                    console.log(`%c ## GoMap click in CREATE MODE ${dumpFeatureToString(this.ol_interaction_draw.currentFeature)}`, 'background: #04f; color: #fdfefe', this.ol_interaction_draw.currentFeature)
+                  } else {
+                    console.log(`%c ## WARNING SELF-INTERSECT GoMap click in CREATE MODE ${dumpFeatureToString(this.ol_interaction_draw.currentFeature)}`, 'background: #f40; color: #fff', this.ol_interaction_draw.currentFeature)
+                    this.ol_interaction_draw.removeLastPoint()
+                  }
+                }
+              }
+            }
             this.$emit('gomapclick', evt.coordinate)
           }
+          console.log(`%c ## END GoMap click callback : ${Number(evt.coordinate[0]).toFixed(2)},${Number(evt.coordinate[1]).toFixed(2)}}`, 'background: #00f; color: #bada55')
         })
       window.onresize = () => {
         // this.$refs.mymap.clientHeight = window.innerHeight - 60

@@ -15,7 +15,7 @@
     "deploy2Vps": "rsync -av --delete-after /home/cgil/WebstormProjects/vue2-map/dist/ myvps:/var/www/map_gil_town/htdocs/"
   },
   "dependencies": {
-    "ol": "^4.4.2",
+    "ol": "^4.5.0",
     "proj4": "^2.4.4",
     "vue": "^2.5.2",
     "vue-router": "^3.0.1"

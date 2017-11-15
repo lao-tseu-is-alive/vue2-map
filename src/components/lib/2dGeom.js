@@ -1,3 +1,13 @@
+/*
+ mini 2d geometry helpers functions
+ https://martin-thoma.com/how-to-check-if-two-line-segments-intersect/
+ https://algs4.cs.princeton.edu/91primitives/
+ i did have a look also on this one but i did not use it : https://www.npmjs.com/package/2d-polygon-self-intersections
+ */
+
+/**
+ * very simplistic Point class
+ */
 class Point {
   constructor (x, y, name = '') {
     this.x = x

@@ -37,6 +37,7 @@ const webpackConfig = merge(baseWebpackConfig, {
       output: {
         comments: false
       },
+      // https://github.com/mishoo/UglifyJS2/tree/harmony#compress-options
       compress: {
         drop_console: true,
         warnings: true

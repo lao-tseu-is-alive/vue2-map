@@ -18,6 +18,7 @@ import OlLayerVector from 'ol/layer/vector'
 import OlLayerTile from 'ol/layer/tile'
 import OlMousePosition from 'ol/control/mouseposition'
 import OlMultiPolygon from 'ol/geom/multipolygon'
+// import OlPolygon from 'ol/geom/polygon'
 import OlMultiPoint from 'ol/geom/multipoint'
 import olControl from 'ol/control'
 import olCoordinate from 'ol/coordinate'
@@ -351,11 +352,56 @@ export function setCreateMode (olMap, olFeatures, arrInteractionsStore, baseCoun
   })
   olMap.addInteraction(modify)
   arrInteractionsStore.push(modify)
+  // var currentNumCoords = 0
   const draw = new OlInteractionDraw({
     features: olFeatures, // vectorSource.getFeatures(),
     type: 'Polygon' /** @type {ol.geom.GeometryType} */
+  /*
+    geometryFunction: function (coords, geom) {
+      if (isNullOrUndefined(geom)) { geom = new OlPolygon(null) }
+      if (!isNullOrUndefined(coords[0])) {
+        let numCoords = coords[0].length
+        if (numCoords > currentNumCoords) {
+          currentNumCoords = numCoords
+          if (numCoords > 3) {
+            let tmpCoords = coords[0].slice(0)
+            tmpCoords.push(coords[0][0])
+            let flatCoords = tmpCoords.reduce((r, s) => r.push(s[0], s[1]) && r, [])
+            // flatCoords = flatCoords.map((p) => p.map((v) => parseFloat(Number(v).toFixed(DIGITIZE_PRECISION))))
+            let bad = polygonSelfIntersect(flatCoords)
+            // console.log(`%c IN setCreateMode geometryFunction callback :`, 'background: #F4D03F; color: #111', coords, geom, bad, flatCoords)
+            if (bad) {
+              console.log(`%c WARNING SELF_INTERSECT in setCreateMode geometryFunction callback `, 'background: #f00; color: #fff', coords, geom, flatCoords)
+              this.removeLastPoint()
+              // coords[0].pop() // on retire la derniere coord qui est pas ok
+            } else {
+              console.log(`%c in setCreateMode geometryFunction callback `, 'background: #0f0; color: #000', coords, geom, flatCoords)
+            }
+          }
+        }
+      }
+      geom.setCoordinates(coords)
+      return geom
+    }
+    */
   })
   var id = baseCounter + 1
+  draw.on('change', function (e) {
+    if (DEV) {
+      console.log(`%c IN setCreateMode EVENT.change :`, 'background: #F4D03F; color: #111', e)
+    }
+  })
+  draw.on('change:active', function (e) {
+    if (DEV) {
+      console.log(`%c IN setCreateMode EVENT.change:active :`, 'background: #F4D03F; color: #111', e)
+    }
+  })
+  draw.on('drawstart', function (e) {
+    if (DEV) {
+      console.log(`%c IN setCreateMode EVENT.drawstart:`, 'background: #F4D03F; color: #111', e)
+      this.currentFeature = e.feature
+    }
+  })
   draw.on('drawend', function (e) {
     let multiPolygon = new OlMultiPolygon([])
     let currentFeature = e.feature // this is the feature fired the event
@@ -382,6 +428,7 @@ export function setCreateMode (olMap, olFeatures, arrInteractionsStore, baseCoun
   })
   olMap.addInteraction(draw)
   arrInteractionsStore.push(draw)
+  return draw
 }
 
 export function setModifyMode (olMap, olLayer2Edit, arrInteractionsStore, endModifyCallback) {
@@ -562,6 +609,39 @@ export function dumpFeatureToString (olFeature) {
   return featureString
 }
 
+export function getMultiPolygonWktGeometryFromPolygonFeaturesInLayer (olLayer, id = 0) {
+  if (isNullOrUndefined(olLayer)) {
+    return null
+  } else {
+    if (DEV) { console.log(`--> getMultiPolygonWktGeometryFromFeaturesInLayer `) }
+    let source = olLayer.getSource()
+    let arrFeatures = source.getFeatures()
+    if (DEV) { console.log(`--> found ${arrFeatures.length} Features`) }
+    let tmpMultiPolygon = new OlMultiPolygon([])
+    if (arrFeatures.length > 0) {
+      for (let i = 0; i < arrFeatures.length; i++) {
+        let geom = arrFeatures[i].getGeometry()
+        let geometryType = geom.getType().toUpperCase()
+        if (geometryType === 'POLYGON') {
+          let exteriorRingCoords = geom.getLinearRing(0).getCoordinates()
+          .map((p) => p.map((v) => parseFloat(Number(v).toFixed(DIGITIZE_PRECISION))))
+          geom.setCoordinates([exteriorRingCoords], 'XY')
+          tmpMultiPolygon.appendPolygon(geom)
+        }
+      }
+      let multiPolygonFeature = new OlFeature({
+        geometry: tmpMultiPolygon
+      })
+      multiPolygonFeature.setId(id)
+      let featureWKTGeometry = getWktGeomFromFeature(multiPolygonFeature)
+      if (DEV) {
+        console.log(`%c WKT : ${featureWKTGeometry} `, 'background: #ffff00; color: #111')
+      }
+      return featureWKTGeometry
+    }
+  }
+}
+
 export function addWktPolygonToLayer (olLayer, wktGeometry, baseCounter) {
   if (isNullOrUndefined(olLayer)) {
     return null
@@ -641,22 +721,29 @@ export function isPointDistanceOkForPolygon (p0, p1) {
  * @param {array} clickPoint : 2d array with x,y coordinates of last point modified
  * @return {boolean} : true if the polygon is valid
  */
-export function isValidPolygon (olFeature, clickPoint = null) {
+export function isValidPolygon (olFeature, clickPoint = null, removeDuplicates = true) {
   let geometry = olFeature.getGeometry()
   let geometryType = geometry.getType().toUpperCase()
   if (geometryType === 'POLYGON') {
     // let's check first condition 1 no point are nearest then tolerance
     // TODO try to do it without clickPoint
-    let coords = geometry.getCoordinates()
-    console.log('## isValidPolygon : Polygon Coords', coords)
+    let coordsPolygon = []
     let exteriorRingCoords = geometry.getLinearRing(0).getCoordinates()
     .map((p) => p.map((v) => parseFloat(Number(v).toFixed(DIGITIZE_PRECISION))))
-    console.log('## isValidPolygon : Polygon Coords', exteriorRingCoords)
+    console.log('## isValidPolygon : Polygon exteriorRingCoords', exteriorRingCoords)
     if (!isNullOrUndefined(clickPoint)) {
       let newCoord = clickPoint.map((v) => parseFloat(Number(v).toFixed(DIGITIZE_PRECISION)))
       console.log('## isValidPolygon : newCoord', newCoord)
       for (let i = 0; i < exteriorRingCoords.length; i++) {
         let p = exteriorRingCoords[i]
+        // let's store only distinct points to take into account fake points in create mode
+        if (i === 0) {
+          coordsPolygon.push(p[0], p[1])
+        } else {
+          if (distance2Point(p, exteriorRingCoords[(i - 1)]) >= EPSILON) {
+            coordsPolygon.push(p[0], p[1])
+          }
+        }
         console.log(`Point ${i} [${p[0]},${p[1]}] = [${newCoord[0]},${newCoord[1]}] is ${pointsIsEqual(p, newCoord)}`)
         console.log(` distance is ${distance2Point(p, newCoord).toFixed(DIGITIZE_PRECISION)}`)
         if (isPointDistanceOkForPolygon(p, newCoord)) {
@@ -667,14 +754,20 @@ export function isValidPolygon (olFeature, clickPoint = null) {
         }
       }
     }
-    // not let's check for condition 2
-    let intersects = polygonSelfIntersect(exteriorRingCoords.reduce((r, s) => r.push(s[0], s[1]) && r, []))
+    // let's check condition 2
+    let intersects = false
+    if (coordsPolygon.length > 0) {
+      console.log('## isValidPolygon : Polygon purified Coords', coordsPolygon)
+      intersects = polygonSelfIntersect(coordsPolygon)
+    } else {
+      intersects = polygonSelfIntersect(exteriorRingCoords.reduce((r, s) => r.push(s[0], s[1]) && r, []))
+    }
     console.log('## isValidPolygon : polygonSelfIntersect(arrCoords) = ', intersects)
     if (intersects) {
       console.log('## isValidPolygon : THIS POLYGON IS NOT VALID')
       return false
     }
-    // not let's check for condition 3
+    // let's check condition 3
 
     return true
   } else {

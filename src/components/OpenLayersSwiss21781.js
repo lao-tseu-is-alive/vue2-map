@@ -399,8 +399,8 @@ export function setCreateMode (olMap, olFeatures, arrInteractionsStore, baseCoun
   draw.on('drawstart', function (e) {
     if (DEV) {
       console.log(`%c IN setCreateMode EVENT.drawstart:`, 'background: #F4D03F; color: #111', e)
-      this.currentFeature = e.feature
     }
+    this.currentFeature = e.feature
   })
   draw.on('drawend', function (e) {
     let multiPolygon = new OlMultiPolygon([])
@@ -574,6 +574,13 @@ export function getNumberFeaturesInLayer (olLayer) {
 
 export function getWktGeomFromFeature (olFeature) {
   const formatWKT = new OlFormatWKT()
+  let geom = olFeature.getGeometry()
+  let geometryType = geom.getType().toUpperCase()
+  if (geometryType === 'POLYGON') {
+    let exteriorRingCoords = geom.getLinearRing(0).getCoordinates()
+    .map((p) => p.map((v) => parseFloat(Number(v).toFixed(DIGITIZE_PRECISION))))
+    geom.setCoordinates([exteriorRingCoords], 'XY')
+  }
   return formatWKT.writeFeature(olFeature)
 }
 
@@ -654,6 +661,7 @@ export function addWktPolygonToLayer (olLayer, wktGeometry, baseCounter) {
       featureProjection: 'EPSG:21781'
     })
     let geometryType = feature.getGeometry().getType().toUpperCase()
+    // TODO if layer contain already features check for identical features and do not add them twice
     switch (geometryType) {
       case 'MULTIPOLYGON':
         // let's add the polygons
@@ -773,5 +781,44 @@ export function isValidPolygon (olFeature, clickPoint = null, removeDuplicates =
   } else {
     console.log('## isValidPolygon : only POLYGON features can be tested here')
     return false
+  }
+}
+
+export function getArrVerticesPolygonFeature (olFeature, removeDuplicates = true) {
+  let geometry = olFeature.getGeometry()
+  let geometryType = geometry.getType().toUpperCase()
+  console.log(`## getNumDistinctVerticesPolygonFeature : geometryType is ${geometryType}`)
+  if (geometryType === 'POLYGON') {
+    let coordsPolygon = []
+    let exteriorRingCoords = geometry.getLinearRing(0).getCoordinates()
+    .map((p) => p.map((v) => parseFloat(Number(v).toFixed(DIGITIZE_PRECISION))))
+    for (let i = 0; i < exteriorRingCoords.length; i++) {
+      let p = exteriorRingCoords[i]
+      // let's store only distinct points to take into account fake points in create mode
+      if (i === 0) {
+        coordsPolygon.push(p[0], p[1])
+      } else {
+        if (distance2Point(p, exteriorRingCoords[(i - 1)]) >= EPSILON) {
+          coordsPolygon.push(p[0], p[1])
+        }
+      }
+    }
+    if (removeDuplicates) {
+      return coordsPolygon
+    } else {
+      return exteriorRingCoords
+    }
+  } else {
+    console.log('## getArrVerticesPolygonFeature : only POLYGON features can be tested here')
+    return null
+  }
+}
+
+export function getNumVerticesPolygonFeature (olFeature, removeDuplicates = true) {
+  let tmpArray = getArrVerticesPolygonFeature(olFeature, removeDuplicates)
+  if (isNullOrUndefined(tmpArray)) {
+    return null
+  } else {
+    return tmpArray.length
   }
 }

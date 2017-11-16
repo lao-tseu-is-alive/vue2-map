@@ -75,6 +75,7 @@
         <option value="EDIT">Edition</option>
         <option value="TRANSLATE">Déplacer</option>
       </select>
+      <button id="cmdSave" class="map-control" @click="saveNewFeatures">Sauver</button>
       <select id="layerSelector" class="ol-layer-selector map-control"
               v-on:change="changeLayer" v-model="activeLayer"
       title="Cliquez pour sélectionner le fond de plan">
@@ -107,7 +108,8 @@
     getMultiPolygonWktGeometryFromPolygonFeaturesInLayer,
     dumpFeatureToString,
     addWktPolygonToLayer,
-    isValidPolygon
+    isValidPolygon,
+    getNumVerticesPolygonFeature
   } from './OpenLayersSwiss21781'
 
   const positionGareLausanne = [537892.8, 152095.7]
@@ -161,14 +163,13 @@
     methods: {
       _updateGeometry: function () {
         if (!isNullOrUndefined(this.geomWkt)) {
+          // TODO check for identical features and do not add them twice
           const numFeaturesAdded = addWktPolygonToLayer(this.ol_newFeaturesLayer, this.geomWkt, this.maxFeatureIdCounter)
-          if (DEV) {
-            if (isNullOrUndefined(numFeaturesAdded)) {
-              console.log(`# ERROR tying to add this invalid Geom : ${this.geomWkt}`, this.geomWkt)
-            } else {
-              console.log(`Successfully added this geomWT to layer now layer has ${numFeaturesAdded} features !`)
-              this.maxFeatureIdCounter += numFeaturesAdded
-            }
+          if (isNullOrUndefined(numFeaturesAdded)) {
+            console.log(`# ERROR tying to add this invalid Geom : ${this.geomWkt}`, this.geomWkt)
+          } else {
+            console.log(`Successfully added this geomWT to layer now layer has ${numFeaturesAdded} features !`)
+            this.maxFeatureIdCounter += numFeaturesAdded
           }
         }
       },
@@ -217,15 +218,11 @@
           case 'EDIT':
             setModifyMode(this.ol_map, this.ol_newFeaturesLayer, this.ol_Active_Interactions,
               (newGeom) => {
-                // here is a good place to save geometry
-                if (DEV) {
-                  console.log(`## in changeMode callback for setModifyMode`, newGeom)
-                  // console.log(`** newGeom in wkt format : ${featureWKTGeometry}`)
-                  // TODO pass the multypolygon  in wkt
-                  let wkt = getMultiPolygonWktGeometryFromPolygonFeaturesInLayer(this.ol_newFeaturesLayer)
-                  this.$emit('gomapgeomchanged', wkt)
-                  console.log(`** BEGIN LAYER CONTENTS **\n${getWktGeometryFeaturesInLayer(this.ol_newFeaturesLayer)}\n** END LAYER CONTENTS **`)
-                }
+                console.log(`## in changeMode callback for setModifyMode`, newGeom)
+                // console.log(`** newGeom in wkt format : ${featureWKTGeometry}`)
+                let wkt = getMultiPolygonWktGeometryFromPolygonFeaturesInLayer(this.ol_newFeaturesLayer)
+                this.$emit('gomapgeomchanged', wkt)
+                console.log(`** BEGIN LAYER CONTENTS **\n${getWktGeometryFeaturesInLayer(this.ol_newFeaturesLayer)}\n** END LAYER CONTENTS **`)
               })
             break
           case 'TRANSLATE':
@@ -244,6 +241,12 @@
           })
           this.uiMode = 'NAVIGATE'
         }
+      },
+      saveNewFeatures: function () {
+        if (this.ol_newFeatures !== null) {
+          let wkt = getMultiPolygonWktGeometryFromPolygonFeaturesInLayer(this.ol_newFeaturesLayer)
+          this.$emit('gomapSaveGeomClick', wkt)
+        }
       }
     },
     mounted () {
@@ -258,6 +261,7 @@
       this.ol_newFeatures = new OlCollection()
       this.ol_newFeaturesLayer = initNewFeaturesLayer(this.ol_map, this.ol_newFeatures)
       this._updateGeometry()
+      // ## EVENTS ##
       this.ol_map.on('click',
         (evt) => {
           if (DEV) {
@@ -277,12 +281,15 @@
             if (this.uiMode === 'CREATE') {
               if (!isNullOrUndefined(this.ol_interaction_draw)) {
                 if (this.ol_interaction_draw.getActive() === true) {
-                  let ok = isValidPolygon(this.ol_interaction_draw.currentFeature, evt.coordinate)
-                  if (ok) {
-                    console.log(`%c ## GoMap click in CREATE MODE ${dumpFeatureToString(this.ol_interaction_draw.currentFeature)}`, 'background: #04f; color: #fdfefe', this.ol_interaction_draw.currentFeature)
-                  } else {
-                    console.log(`%c ## WARNING SELF-INTERSECT GoMap click in CREATE MODE ${dumpFeatureToString(this.ol_interaction_draw.currentFeature)}`, 'background: #f40; color: #fff', this.ol_interaction_draw.currentFeature)
-                    this.ol_interaction_draw.removeLastPoint()
+                  let numVertices = getNumVerticesPolygonFeature(this.ol_interaction_draw.currentFeature)
+                  if (numVertices > 3) {
+                    let ok = isValidPolygon(this.ol_interaction_draw.currentFeature, evt.coordinate)
+                    if (ok) {
+                      console.log(`%c ## GoMap click in CREATE MODE ${dumpFeatureToString(this.ol_interaction_draw.currentFeature)}`, 'background: #04f; color: #fdfefe', this.ol_interaction_draw.currentFeature)
+                    } else {
+                      console.log(`%c ## WARNING SELF-INTERSECT GoMap click in CREATE MODE ${dumpFeatureToString(this.ol_interaction_draw.currentFeature)}`, 'background: #f40; color: #fff', this.ol_interaction_draw.currentFeature)
+                      this.ol_interaction_draw.removeLastPoint()
+                    }
                   }
                 }
               }
@@ -298,4 +305,3 @@
     }
   }
 </script>
-

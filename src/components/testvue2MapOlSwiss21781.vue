@@ -21,16 +21,22 @@
   <h1>{{msg}}</h1>
   <div class="container">
     <div class="mymaps">
-      <vue2-map-ol-swiss21781 id="map1" :geom-wkt="mygeom1"></vue2-map-ol-swiss21781>
+      <vue2-map-ol-swiss21781 id="map1"
+                              :geom-wkt="mygeom1"
+                              v-on:gomapSaveGeomClick="saveGeometry1">
+      </vue2-map-ol-swiss21781>
       <textarea id="txtgeom1" rows="8" cols="60" v-model="mygeom1"></textarea>
-      <textarea id="loggeom1" rows="5" cols="60" ></textarea>
+      <p>Saved geometry</p>
+      <textarea id="loggeom1" rows="8" cols="60" ></textarea>
     </div>
     <div class="mymaps">
       <vue2-map-ol-swiss21781 id="map2"
-        :geom-wkt="mygeom2">
+                              :geom-wkt="mygeom2"
+                              v-on:gomapSaveGeomClick="saveGeometry2">
       </vue2-map-ol-swiss21781>
       <textarea id="txtgeom2" rows="8" cols="60" v-model="mygeom2"></textarea>
-      <textarea id="loggeom2" rows="5" cols="60" ></textarea>
+      <p>Saved geometry</p>
+      <textarea id="loggeom2" rows="8" cols="60" ></textarea>
     </div>
   </div>
   </div>
@@ -49,6 +55,18 @@
         ((537884.03 152099.71,537883.73 152088.79,537891.14 152087.34,537892.39 152098.71,537884.03 152099.71)),
         ((537893.10 152094.40,537892.40 152087.44,537896.56 152087.04,537893.10 152094.40))
         )`
+      }
+    },
+    methods: {
+      saveGeometry1: function (val) {
+        console.info('In PARENT TEST VUE2-MAP 1  event gomapSaveGeomClick received : ', val)
+        let logtxt = document.getElementById('loggeom1')
+        logtxt.innerText = val
+      },
+      saveGeometry2: function (val) {
+        console.info('In PARENT TEST VUE2-MAP 2 event gomapSaveGeomClick received : ', val)
+        let logtxt = document.getElementById('loggeom2')
+        logtxt.innerText = val
       }
     }
   }

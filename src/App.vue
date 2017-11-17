@@ -1,8 +1,12 @@
 <template>
   <div id="app">
     <div class="gotitle">
-      <router-link to="/">home</router-link>
-      <router-link to="/test">test</router-link>
+      <router-link to="/">
+        <el-button type="info" size="mini" round icon="el-icon-picture">Home</el-button>
+      </router-link>
+      <router-link to="/test">
+        <el-button type="info" size="mini" round icon="el-icon-home">Testing</el-button>
+      </router-link>
     </div>
     <router-view></router-view>
   </div>
@@ -33,7 +37,7 @@
   }
   .gotitle{
     width: 100%;
-    height: 2em;
+    // height: 2em;
     color: #ffFFFF;
     text-align: center;
     vertical-align: center;

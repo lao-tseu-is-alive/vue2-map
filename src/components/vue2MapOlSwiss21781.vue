@@ -77,10 +77,11 @@
     <slot></slot>
     <el-container>
       <el-header height="32px">
-        <el-button-group>
+        <el-button-group v-show="editGeomEnabled">
           <!--
           <el-button id="cmdClear" type="warning" size="small" round @click="clearNewFeatures">Clear</el-button>
           -->
+
           <el-select v-if="isSmallScreen" id="modeSelector" :size="sizeOfControl"
               v-on:change="changeMode" v-model="uiMode"
               title="Cliquez pour sélectionner le mode de travail">
@@ -97,9 +98,8 @@
           </el-radio-group>
 
         </el-button-group>
-        <el-button id="cmdSave" type="warning" :size="sizeOfControl"  @click="saveNewFeatures">Sauver</el-button>
-
-        <span class="gostatus">{{getNumPolygons}} Polygones</span>
+        <el-button id="cmdSave" v-show="editGeomEnabled" type="warning" :size="sizeOfControl"  @click="saveNewFeatures">Sauver</el-button>
+        <span class="gostatus" v-show="(getNumPolygons > 0)">{{getNumPolygons}} Polygones</span>
         <el-select id="layerSelector" :size="sizeOfControl" style="float: right"
                    v-on:change="changeLayer" v-model="activeLayer"
                    title="Cliquez pour sélectionner le fond de plan">
@@ -199,6 +199,10 @@
       baseLayer: {
         type: String,
         default: 'fonds_geo_osm_bdcad_couleur'
+      },
+      editGeomEnabled: {
+        type: Boolean,
+        default: false
       },
       geomWkt: {
         type: String,

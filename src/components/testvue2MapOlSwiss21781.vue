@@ -1,13 +1,13 @@
 <style lang="scss">
-  .container{
-    display: block;
+  .mymaps-container{
+    display: flex;
     width: 100%;
     background-color: #1b6d85;
     text-align: center;
   }
 
-  .mymaps{
-    margin: 10px;
+  .mymaps-element{
+    margin: auto;
     padding: 10px;
     float: left;
     width: 45%;
@@ -19,17 +19,18 @@
 <template>
   <div>
   <h1>{{msg}}</h1>
-  <div class="container">
-    <div class="mymaps">
+  <div class="mymaps-container">
+    <div class="mymaps-element">
       <vue2-map-ol-swiss21781 id="map1"
                               :geom-wkt="mygeom1"
+                              :edit-geom-enabled="true"
                               v-on:gomapSaveGeomClick="saveGeometry1">
       </vue2-map-ol-swiss21781>
       <textarea id="txtgeom1" rows="8" cols="60" v-model="mygeom1"></textarea>
-      <p>Saved geometry</p>
+      <p>Saved geometry :</p>
       <textarea id="loggeom1" rows="8" cols="60" ></textarea>
     </div>
-    <div class="mymaps">
+    <div class="mymaps-element">
       <vue2-map-ol-swiss21781 id="map2"
                               :geom-wkt="mygeom2"
                               v-on:gomapSaveGeomClick="saveGeometry2">
